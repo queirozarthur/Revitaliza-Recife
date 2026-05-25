@@ -64,8 +64,7 @@ int main(void)
         { (Rectangle){540, 470, 200, 50}, "[0] Sair"         },
     };
 
-    /* Forçar TELA_JOGO para testar o tabuleiro */
-    TelaJogo estado = TELA_JOGO;
+    TelaJogo estado = TELA_MENU;
 
     /* ---------------------------------------------------------------- */
     /* Game loop                                                         */
