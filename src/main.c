@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "board.h"
+#include "cards.h"
 
 #define COR_FUNDO      (Color){ 10,  20,  40, 255 }
 #define COR_TITULO     (Color){ 255, 140,  30, 255 }
@@ -24,7 +25,8 @@ int main(void)
     SetTargetFPS(60);
 
     /* Cria o tabuleiro (lista circular) na inicialização */
-    Tabuleiro *tabuleiro = tabuleiro_criar();
+    Tabuleiro    *tabuleiro = tabuleiro_criar();
+    SistemaCartas *cartas   = cartas_criar();
 
     Botao botoes[NUM_BOTOES] = {
         { (Rectangle){ 300, 220, 200, 50 }, "[1] Iniciar Jogo" },
@@ -41,6 +43,7 @@ int main(void)
             if (CheckCollisionPointRec(mouse, botoes[i].rect) &&
                 IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                 if (i == NUM_BOTOES - 1) {
+                    cartas_destruir(cartas);
                     tabuleiro_destruir(tabuleiro);
                     CloseWindow();
                     return 0;
@@ -81,6 +84,7 @@ int main(void)
         EndDrawing();
     }
 
+    cartas_destruir(cartas);
     tabuleiro_destruir(tabuleiro);
     CloseWindow();
     return 0;
