@@ -1,11 +1,18 @@
+CC     = C:/msys64/ucrt64/bin/gcc.exe
+CFLAGS = -Wall -Wextra -std=c11 -Isrc -IC:/msys64/ucrt64/include
 
-CC = gcc
-CFLAGS = -Wall -std=c11
- 
-all: recife
- 
-recife: src/main.c
-	$(CC) $(CFLAGS) -o recife src/main.c
- 
+LDFLAGS = -LC:/msys64/ucrt64/lib \
+          -lraylib -lopengl32 -lgdi32 -lwinmm
+
+SRC = src/main.c src/board.c
+OUT = recife.exe
+
+.PHONY: all clean
+
+all: $(OUT)
+
+$(OUT): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 clean:
-	rm -f recife
+	del /Q $(OUT) 2>NUL || rm -f $(OUT)
