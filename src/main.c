@@ -67,6 +67,7 @@ int main(void)
     srand(time(NULL));
     InitWindow(LARGURA, ALTURA, "Revitaliza Recife — Porto Digital");
     SetTargetFPS(60);
+    SetExitKey(KEY_NULL);
 
     Tabuleiro     *tabuleiro     = NULL;
     SistemaCartas *cartas        = NULL;
@@ -606,18 +607,27 @@ int main(void)
         /* Uso de Carta de Ação */
         if (anim.estado == TURNO_USANDO_ACAO) {
             if (!IS_BOT) {
-                if (IsKeyPressed(KEY_ESCAPE)) {
+                Vector2 mouse = GetMousePosition();
+                bool clicked = IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
+                
+                Rectangle rect_confirm = {710, 460, 180, 40};
+                Rectangle rect_cancel = {910, 460, 180, 40};
+                
+                if (IsKeyPressed(KEY_ESCAPE) || (clicked && CheckCollisionPointRec(mouse, rect_cancel))) {
                     anim.estado = TURNO_AGUARDANDO;
-                } else if (IsKeyPressed(KEY_ENTER)) {
+                } else if (IsKeyPressed(KEY_ENTER) || (clicked && CheckCollisionPointRec(mouse, rect_confirm))) {
                     usar_carta_acao(jogadores, NUM_JOGADORES, jogador_atual, anim.acao_carta_id, anim.acao_alvo_idx, tabuleiro);
                     J_ATUAL->cartas_acao[anim.acao_slot] = -1;
                     anim.estado = TURNO_AGUARDANDO;
                 } else if (anim.acao_carta_id == 3) {
+                    int y_offset = 180;
                     for (int i = 0; i < NUM_JOGADORES; i++) {
                         if (i == jogador_atual) continue;
-                        if (IsKeyPressed(KEY_ONE + i) || IsKeyPressed(KEY_KP_1 + i)) {
+                        Rectangle btn = {710, 200 + y_offset, 380, 30};
+                        if (IsKeyPressed(KEY_ONE + i) || IsKeyPressed(KEY_KP_1 + i) || (clicked && CheckCollisionPointRec(mouse, btn))) {
                             anim.acao_alvo_idx = i;
                         }
+                        y_offset += 40;
                     }
                 }
             } else {
@@ -830,8 +840,13 @@ int main(void)
         }
 
         /* ---- JOGO ---- */
-        case TELA_JOGO:
+        case TELA_JOGO: {
+            int festa = 0;
+            for (int i=0; i<NUM_JOGADORES; i++) {
+                if (jogadores[i].turnos_festa > 0) { festa = 1; break; }
+            }
             render_tabuleiro(tabuleiro, jogadores, NUM_JOGADORES, jogador_atual, &anim);
+            render_confetti(festa);
             render_hud(jogadores, NUM_JOGADORES, jogador_atual, hud_jogador_focado, ultimo_dado);
             render_dado(&anim);
             render_carta_overlay(&anim);
@@ -839,6 +854,7 @@ int main(void)
             render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
             render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
             break;
+        }
 
         /* ---- RESULTADO ---- */
         case TELA_RESULTADO: {

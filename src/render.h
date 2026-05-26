@@ -92,5 +92,6 @@ void render_carta_overlay(const AnimacaoTurno *anim);
 void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogador);
 void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim, Font fonte);
 void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atual, AnimacaoTurno *anim, Font fonte);
+void render_confetti(int active);
 
 #endif /* RENDER_H */

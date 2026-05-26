@@ -512,6 +512,11 @@ void render_dado_simples(int face, int cx, int cy, int raio, int jitter_x, int j
 void render_dado(const AnimacaoTurno *anim)
 {
     if (!anim || anim->estado == TURNO_AGUARDANDO) return;
+    if (anim->estado == TURNO_ESPERANDO_COMPRA_CARTA || 
+        anim->estado == TURNO_ANIMANDO_COMPRA_CARTA ||
+        anim->estado == TURNO_MOSTRANDO_CARTA ||
+        anim->estado == TURNO_MOSTRANDO_PROPRIEDADE ||
+        anim->estado == TURNO_USANDO_ACAO) return;
 
     const int CX   = BX + CS + (5*SW) / 2;
     const int CY   = BY + CS + (5*SH) / 2;
@@ -902,19 +907,18 @@ void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atua
     int c_id = anim->acao_carta_id;
     Texture2D tex = textura_cartas_acao[c_id];
     
-    float cw = 280, ch = 420;
-    float cx = 479 - cw/2, cy = 360 - ch/2;
+    float cw = 500, ch = 500 * (1492.0f/2676.0f); // approx 500x278
+    float cx = 400 - cw/2, cy = 360 - ch/2;
     Rectangle rect = {cx, cy, cw, ch};
     
     if (tex.id != 0) {
-        float crop_w = tex.height * (2.0f/3.0f);
-        Rectangle src = { (tex.width - crop_w)/2.0f, 0, crop_w, tex.height };
+        Rectangle src = { 0, 0, tex.width, tex.height };
         DrawTexturePro(tex, src, rect, (Vector2){0,0}, 0.0f, WHITE);
     } else {
         DrawRectangleRec(rect, DARKGRAY);
     }
     
-    Rectangle box = { cx + cw + 40, cy + 50, 420, 320 };
+    Rectangle box = { cx + cw + 40, 360 - 160, 420, 320 };
     DrawRectangleRounded(box, 0.1f, 10, (Color){40, 40, 60, 240});
     DrawRectangleLinesEx(box, 3, WHITE);
     
@@ -954,4 +958,61 @@ void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atua
     
     DrawRectangleRounded((Rectangle){box.x + 220, box.y + 260, 180, 40}, 0.2f, 5, (Color){160,40,40,255});
     DrawText("[ESC] Cancelar", box.x + 255, box.y + 270, 16, WHITE);
+}
+
+#define NUM_CONFETTI 150
+typedef struct {
+    Vector2 pos;
+    Vector2 vel;
+    Color color;
+    float rotation;
+    float rot_speed;
+    float size;
+} Confetti;
+
+static Confetti confetis[NUM_CONFETTI] = {0};
+static int confetis_iniciados = 0;
+
+void render_confetti(int active) {
+    if (!active) {
+        confetis_iniciados = 0;
+        return;
+    }
+    
+    if (!confetis_iniciados) {
+        for (int i = 0; i < NUM_CONFETTI; i++) {
+            confetis[i].pos.x = GetRandomValue(0, 1280);
+            confetis[i].pos.y = GetRandomValue(-720, 0);
+            confetis[i].vel.x = GetRandomValue(-50, 50);
+            confetis[i].vel.y = GetRandomValue(100, 300);
+            
+            int c = GetRandomValue(0, 3);
+            if (c==0) confetis[i].color = RED;
+            else if (c==1) confetis[i].color = GREEN;
+            else if (c==2) confetis[i].color = BLUE;
+            else confetis[i].color = GOLD;
+            
+            confetis[i].rotation = GetRandomValue(0, 360);
+            confetis[i].rot_speed = GetRandomValue(-200, 200);
+            confetis[i].size = GetRandomValue(8, 16);
+        }
+        confetis_iniciados = 1;
+    }
+
+    float dt = GetFrameTime();
+    for (int i = 0; i < NUM_CONFETTI; i++) {
+        confetis[i].pos.x += confetis[i].vel.x * dt;
+        confetis[i].pos.y += confetis[i].vel.y * dt;
+        confetis[i].rotation += confetis[i].rot_speed * dt;
+        
+        confetis[i].pos.x += sinf(GetTime() * 2.0f + i) * 30.0f * dt;
+
+        if (confetis[i].pos.y > 720) {
+            confetis[i].pos.y = -20;
+            confetis[i].pos.x = GetRandomValue(0, 1280);
+        }
+
+        Rectangle rect = {confetis[i].pos.x, confetis[i].pos.y, confetis[i].size, confetis[i].size};
+        DrawRectanglePro(rect, (Vector2){confetis[i].size/2, confetis[i].size/2}, confetis[i].rotation, confetis[i].color);
+    }
 }
