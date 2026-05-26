@@ -1,7 +1,7 @@
 
-CC     = gcc
-CFLAGS = -Wall -Wextra -std=c11 -Isrc -IC:/raylib/raylib/src
-LDFLAGS = -LC:/raylib/raylib/src -lraylib -lopengl32 -lgdi32 -lwinmm
+CC     = C:/msys64/ucrt64/bin/gcc.exe
+CFLAGS = -Wall -Wextra -std=c11 -Isrc -IC:/msys64/ucrt64/include
+LDFLAGS = -LC:/msys64/ucrt64/lib -lraylib -lopengl32 -lgdi32 -lwinmm
  
 SRC = src/main.c src/board.c src/hashtable.c src/cards.c src/player.c src/render.c
 OUT = recife.exe
