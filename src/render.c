@@ -518,3 +518,133 @@ void render_carta_overlay(const AnimacaoTurno *anim)
     DrawText(hint, PX + PW/2 - tw/2, PY + PH - 34, 13,
              (Color){130, 150, 190, 200});
 }
+
+/* ------------------------------------------------------------------ */
+/* render_propriedade_overlay                                           */
+/* ------------------------------------------------------------------ */
+void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogador)
+{
+    if (!anim || anim->estado != TURNO_MOSTRANDO_PROPRIEDADE || !anim->casa_ativa)
+        return;
+
+    const Casa *casa = anim->casa_ativa;
+
+    Color cor_setor;
+    const char *setor_str;
+    switch (casa->setor) {
+        case SETOR_TECNOLOGIA: cor_setor = COR_TEC; setor_str = "TECNOLOGIA"; break;
+        case SETOR_TURISMO:    cor_setor = COR_TUR; setor_str = "TURISMO";    break;
+        case SETOR_COMERCIO:   cor_setor = COR_COM; setor_str = "COMERCIO";   break;
+        default:               cor_setor = (Color){150,150,150,255}; setor_str = "NEUTRO"; break;
+    }
+
+    const int PW = 480, PH = 360;
+    const int PX = (1280 - PW) / 2;
+    const int PY = (720  - PH) / 2;
+
+    DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 170});
+
+    DrawRectangleRounded(
+        (Rectangle){(float)(PX+6),(float)(PY+6),(float)PW,(float)PH},
+        0.06f, 8, (Color){0,0,0,120});
+
+    DrawRectangleRounded(
+        (Rectangle){(float)PX,(float)PY,(float)PW,(float)PH},
+        0.06f, 8, (Color){12,22,48,255});
+
+    DrawRectangleRoundedLines(
+        (Rectangle){(float)PX,(float)PY,(float)PW,(float)PH},
+        0.06f, 8, cor_setor);
+
+    /* Cabeçalho */
+    DrawRectangleRounded(
+        (Rectangle){(float)PX,(float)PY,(float)PW,60.0f},
+        0.06f, 8, cor_setor);
+    DrawRectangle(PX, PY+40, PW, 20, cor_setor);
+
+    const char *header = anim->eh_aluguel ? "ALUGUEL" : "PROPRIEDADE A VENDA";
+    int tw = MeasureText(header, 22);
+    DrawText(header, PX + PW/2 - tw/2, PY + 17, 22, WHITE);
+
+    int ty = PY + 76;
+    char buf[64];
+
+    /* Nome da propriedade */
+    tw = MeasureText(casa->nome, 20);
+    DrawText(casa->nome, PX + PW/2 - tw/2, ty, 20, WHITE);
+    ty += 30;
+
+    /* Badge do setor */
+    int sw = MeasureText(setor_str, 12);
+    DrawRectangle(PX + PW/2 - sw/2 - 8, ty - 2, sw + 16, 20, cor_setor);
+    DrawText(setor_str, PX + PW/2 - sw/2, ty, 12, WHITE);
+    ty += 30;
+
+    DrawLine(PX+20, ty, PX+PW-20, ty, (Color){60,80,120,255});
+    ty += 16;
+
+    if (anim->eh_aluguel) {
+        int aluguel = casa->custo / 2;
+        snprintf(buf, sizeof(buf), "Aluguel: %d moedas", aluguel);
+        tw = MeasureText(buf, 20);
+        DrawText(buf, PX + PW/2 - tw/2, ty, 20, (Color){255,215,0,255});
+        ty += 32;
+
+        snprintf(buf, sizeof(buf), "Seu saldo: %d moedas", jogador->moedas);
+        tw = MeasureText(buf, 14);
+        Color cs = (jogador->moedas >= aluguel)
+                   ? (Color){180,210,255,200} : (Color){220,60,60,255};
+        DrawText(buf, PX + PW/2 - tw/2, ty, 14, cs);
+
+        const char *hint = "[ESPACO] ou [ENTER]  Pagar aluguel";
+        tw = MeasureText(hint, 13);
+        DrawText(hint, PX + PW/2 - tw/2, PY + PH - 34, 13,
+                 (Color){130,150,190,200});
+    } else {
+        snprintf(buf, sizeof(buf), "Custo: %d moedas", casa->custo);
+        tw = MeasureText(buf, 20);
+        DrawText(buf, PX + PW/2 - tw/2, ty, 20, (Color){255,215,0,255});
+        ty += 28;
+
+        snprintf(buf, sizeof(buf), "Gera: +%d pontos de %s", casa->pontos, setor_str);
+        tw = MeasureText(buf, 14);
+        DrawText(buf, PX + PW/2 - tw/2, ty, 14, cor_setor);
+        ty += 26;
+
+        snprintf(buf, sizeof(buf), "Seu saldo: %d moedas", jogador->moedas);
+        tw = MeasureText(buf, 14);
+        Color cs = (jogador->moedas >= casa->custo)
+                   ? (Color){180,210,255,200} : (Color){220,60,60,255};
+        DrawText(buf, PX + PW/2 - tw/2, ty, 14, cs);
+        ty += 32;
+
+        DrawLine(PX+20, ty, PX+PW-20, ty, (Color){60,80,120,255});
+        ty += 18;
+
+        int pode = (jogador->moedas >= casa->custo);
+        Color cor_c     = pode ? (Color){30,130,60,255} : (Color){40,60,45,255};
+        Color cor_c_txt = pode ? WHITE                  : (Color){80,110,85,255};
+
+        /* Botão [C] */
+        DrawRectangleRounded(
+            (Rectangle){(float)(PX+50),(float)ty,160.0f,44.0f},
+            0.22f, 6, cor_c);
+        const char *c_txt = "[C]  Comprar";
+        tw = MeasureText(c_txt, 16);
+        DrawText(c_txt, PX+50+80-tw/2, ty+14, 16, cor_c_txt);
+
+        /* Botão [X] */
+        DrawRectangleRounded(
+            (Rectangle){(float)(PX+PW-210),(float)ty,160.0f,44.0f},
+            0.22f, 6, (Color){90,30,30,255});
+        const char *x_txt = "[X]  Passar";
+        tw = MeasureText(x_txt, 16);
+        DrawText(x_txt, PX+PW-210+80-tw/2, ty+14, 16, WHITE);
+
+        if (!pode) {
+            const char *nota = "Moedas insuficientes";
+            tw = MeasureText(nota, 12);
+            DrawText(nota, PX+PW/2-tw/2, PY+PH-34, 12, (Color){220,80,80,200});
+        }
+    }
+}

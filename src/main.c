@@ -164,9 +164,19 @@ int main(void)
                             }
 
                             if (carta) {
-                                /* Mostra a carta antes de aplicar o efeito */
                                 anim.carta_ativa = carta;
                                 anim.estado      = TURNO_MOSTRANDO_CARTA;
+                            } else if (jogador.posicao->tipo == CASA_PROPRIEDADE) {
+                                anim.casa_ativa = jogador.posicao;
+                                if (jogador.posicao->proprietario < 0) {
+                                    anim.eh_aluguel = 0;
+                                    anim.estado     = TURNO_MOSTRANDO_PROPRIEDADE;
+                                } else if (jogador.posicao->proprietario != 0) {
+                                    anim.eh_aluguel = 1;
+                                    anim.estado     = TURNO_MOSTRANDO_PROPRIEDADE;
+                                } else {
+                                    anim.estado = TURNO_AGUARDANDO;
+                                }
                             } else {
                                 anim.estado = TURNO_AGUARDANDO;
                             }
@@ -181,12 +191,36 @@ int main(void)
                 break;
         }
 
-        /* Fecha a carta e aplica o efeito (fora do switch para qualquer tela) */
+        /* Fecha a carta e aplica o efeito */
         if (anim.estado == TURNO_MOSTRANDO_CARTA &&
             (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER))) {
             carta_aplicar_efeito(anim.carta_ativa, &jogador, 1, 0, tabuleiro);
             anim.carta_ativa = NULL;
             anim.estado      = TURNO_AGUARDANDO;
+        }
+
+        /* Propriedade: compra ou aluguel */
+        if (anim.estado == TURNO_MOSTRANDO_PROPRIEDADE && anim.casa_ativa) {
+            if (!anim.eh_aluguel) {
+                if (IsKeyPressed(KEY_C) && jogador.moedas >= anim.casa_ativa->custo) {
+                    jogador.moedas -= anim.casa_ativa->custo;
+                    jogador.pontos[anim.casa_ativa->setor] += anim.casa_ativa->pontos;
+                    anim.casa_ativa->proprietario = 0;
+                    anim.casa_ativa = NULL;
+                    anim.estado     = TURNO_AGUARDANDO;
+                } else if (IsKeyPressed(KEY_X)) {
+                    anim.casa_ativa = NULL;
+                    anim.estado     = TURNO_AGUARDANDO;
+                }
+            } else {
+                if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
+                    int aluguel = anim.casa_ativa->custo / 2;
+                    jogador.moedas -= aluguel;
+                    if (jogador.moedas < 0) jogador.moedas = 0;
+                    anim.casa_ativa = NULL;
+                    anim.estado     = TURNO_AGUARDANDO;
+                }
+            }
         }
 
         /* ---- DRAW ---- */
@@ -231,7 +265,8 @@ int main(void)
                 render_tabuleiro(tabuleiro, &jogador, &anim);
                 render_hud(&jogador, ultimo_dado);
                 render_dado(&anim);
-                render_carta_overlay(&anim);  /* por cima de tudo */
+                render_carta_overlay(&anim);
+                render_propriedade_overlay(&anim, &jogador);
                 break;
 
             case TELA_RESULTADO:
