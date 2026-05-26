@@ -268,7 +268,7 @@ static void barra_progresso(int x, int y, int w, int h, float ratio, Color cor)
     DrawRectangleLines(x, y, w, h, (Color){60, 80, 120, 255});
 }
 
-void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
+void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual, int jogador_focado,
                 int ultimo_dado)
 {
     const int HX = 962, HW = 308;
@@ -278,12 +278,15 @@ void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
 
     if (!jogadores) return;
 
-    const Jogador *j = &jogadores[jogador_atual];
+    if (jogador_focado < 0 || jogador_focado >= num_jogadores)
+        jogador_focado = jogador_atual;
+
+    const Jogador *j = &jogadores[jogador_focado];
     int x = HX, y = 20;
     char buf[64];
 
-    /* Título com cor do pino atual */
-    DrawText("STATUS", x, y, 20, COR_PINO[jogador_atual]);
+    /* Título com cor do pino focado */
+    DrawText("STATUS", x, y, 20, COR_PINO[jogador_focado]);
     y += 28;
     DrawLine(x, y, x+HW, y, (Color){255,140,30,80});
     y += 10;
@@ -291,7 +294,7 @@ void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
     /* Nome e tipo do jogador atual */
     const char *tipo_str = (j->tipo == TIPO_BOT) ? " [BOT]" : "";
     snprintf(buf, sizeof(buf), "%s%s", j->nome, tipo_str);
-    DrawText(buf, x, y, 16, COR_PINO[jogador_atual]);
+    DrawText(buf, x, y, 16, COR_PINO[jogador_focado]);
     y += 28;
 
     /* Moedas */
@@ -346,6 +349,11 @@ void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
                          ? COR_PINO[i]
                          : (Color){120, 140, 180, 180};
 
+        /* Destacar o jogador que está sendo focado no HUD */
+        if (i == jogador_focado) {
+            DrawRectangle(x, y - 2, HW - 10, 20, (Color){30, 50, 80, 255});
+        }
+
         /* Bolinha colorida */
         DrawCircle(x + 6, y + 7, 5, COR_PINO[i]);
 
@@ -353,11 +361,15 @@ void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
                  jogadores[i].nome, pts, jogadores[i].moedas);
         DrawText(buf, x + 15, y, 11, cor_nome);
 
-        /* Asterisco no turno atual */
+        /* Símbolo do turno atual */
         if (i == jogador_atual)
-            DrawText("<", x + HW - 10, y, 11, COR_PINO[i]);
+            DrawText(">", x - 8, y, 11, COR_PINO[i]);
+            
+        /* Se focado e não for o turno atual, indicar de leve */
+        if (i == jogador_focado && i != jogador_atual)
+            DrawText("*", x - 8, y, 11, (Color){180, 180, 180, 200});
 
-        y += 17;
+        y += 20;
     }
 
     y += 6;
@@ -421,6 +433,33 @@ static void desenhar_pontos_dado(int face, float cx, float cy, float raio)
     }
 }
 
+void render_dado_simples(int face, int cx, int cy, int raio, int jitter_x, int jitter_y, int destaque)
+{
+    int px = cx + jitter_x;
+    int py = cy + jitter_y;
+
+    DrawRectangleRounded(
+        (Rectangle){(float)(px - raio + 5), (float)(py - raio + 5),
+                    (float)(2*raio),         (float)(2*raio)},
+        0.18f, 6, (Color){0, 0, 0, 100}
+    );
+
+    DrawRectangleRounded(
+        (Rectangle){(float)(px - raio), (float)(py - raio),
+                    (float)(2*raio),    (float)(2*raio)},
+        0.18f, 6, (Color){240, 240, 250, 255}
+    );
+
+    Color borda = destaque ? (Color){255, 140, 30, 255} : (Color){180, 180, 200, 255};
+    DrawRectangleRoundedLines(
+        (Rectangle){(float)(px - raio), (float)(py - raio),
+                    (float)(2*raio),    (float)(2*raio)},
+        0.18f, 6, borda
+    );
+
+    desenhar_pontos_dado(face, (float)px, (float)py, (float)raio);
+}
+
 void render_dado(const AnimacaoTurno *anim)
 {
     if (!anim || anim->estado == TURNO_AGUARDANDO) return;
@@ -429,33 +468,9 @@ void render_dado(const AnimacaoTurno *anim)
     const int CY   = BY + CS + (5*SH) / 2;
     const int RAIO = 52;
 
-    int cx = CX + anim->jitter_x;
-    int cy = CY + anim->jitter_y;
-
     DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){0, 0, 0, 150});
 
-    DrawRectangleRounded(
-        (Rectangle){(float)(cx - RAIO + 5), (float)(cy - RAIO + 5),
-                    (float)(2*RAIO),         (float)(2*RAIO)},
-        0.18f, 6, (Color){0, 0, 0, 100}
-    );
-
-    DrawRectangleRounded(
-        (Rectangle){(float)(cx - RAIO), (float)(cy - RAIO),
-                    (float)(2*RAIO),    (float)(2*RAIO)},
-        0.18f, 6, (Color){240, 240, 250, 255}
-    );
-
-    Color borda = (anim->estado == TURNO_PINO_MOVENDO)
-                  ? (Color){255, 140, 30, 255}
-                  : (Color){180, 180, 200, 255};
-    DrawRectangleRoundedLines(
-        (Rectangle){(float)(cx - RAIO), (float)(cy - RAIO),
-                    (float)(2*RAIO),    (float)(2*RAIO)},
-        0.18f, 6, borda
-    );
-
-    desenhar_pontos_dado(anim->face_atual, (float)cx, (float)cy, (float)RAIO);
+    render_dado_simples(anim->face_atual, CX, CY, RAIO, anim->jitter_x, anim->jitter_y, anim->estado == TURNO_PINO_MOVENDO);
 
     if (anim->estado == TURNO_PINO_MOVENDO) {
         char txt[24];
@@ -463,7 +478,7 @@ void render_dado(const AnimacaoTurno *anim)
                  anim->passos_restantes,
                  anim->passos_restantes == 1 ? "" : "s");
         int tw = MeasureText(txt, 13);
-        DrawText(txt, cx - tw/2, cy + RAIO + 10, 13, (Color){255,215,0,255});
+        DrawText(txt, CX + anim->jitter_x - tw/2, CY + anim->jitter_y + RAIO + 10, 13, (Color){255,215,0,255});
     }
 }
 

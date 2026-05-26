@@ -60,8 +60,10 @@ void render_tabuleiro(const Tabuleiro *tab,
                       const Jogador *jogadores, int num_jogadores, int jogador_atual,
                       const AnimacaoTurno *anim);
 
-void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
+void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual, int jogador_focado,
                 int ultimo_dado);
+
+void render_dado_simples(int face, int cx, int cy, int raio, int jitter_x, int jitter_y, int destaque);
 
 void render_dado(const AnimacaoTurno *anim);
 

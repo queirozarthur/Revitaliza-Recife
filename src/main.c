@@ -6,6 +6,7 @@
 #include "ranking.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 #define LARGURA       1280
 #define ALTURA         720
@@ -63,6 +64,7 @@ static void iniciar_dado(AnimacaoTurno *anim, int *ultimo_dado)
 /* ------------------------------------------------------------------ */
 int main(void)
 {
+    srand(time(NULL));
     InitWindow(LARGURA, ALTURA, "Revitaliza Recife — Porto Digital");
     SetTargetFPS(60);
 
@@ -70,6 +72,7 @@ int main(void)
     SistemaCartas *cartas        = NULL;
     Jogador        jogadores[NUM_JOGADORES];
     int            jogador_atual   = 0;
+    int            hud_jogador_focado = -1;
     float          bot_delay       = -1.0f;  /* < 0 = timer não iniciado */
     int            turno_terminado = 0;
 
@@ -213,15 +216,34 @@ int main(void)
         case TELA_ORDEM: {
             if (ordem_rolagem_atual < NUM_JOGADORES) {
                 ordem_timer_dado += dt;
-                anim.face_atual = rand() % 6 + 1;
+                anim.estado = TURNO_DADO_GIRANDO;
+                anim.timer_dado = ordem_timer_dado;
+                anim.proximo_flash -= dt;
+
+                if (anim.proximo_flash <= 0.0f) {
+                    anim.face_atual = rand() % 6 + 1;
+                    anim.proximo_flash = 0.08f;
+                    if (ordem_timer_dado < 0.8f) {
+                        anim.jitter_x = (rand() % 21) - 10;
+                        anim.jitter_y = (rand() % 21) - 10;
+                    } else {
+                        anim.jitter_x = (rand() % 5) - 2;
+                        anim.jitter_y = (rand() % 5) - 2;
+                    }
+                }
                 
                 if (ordem_timer_dado > 1.2f) { // Após 1.2s rolando
                     ordem_resultados[ordem_rolagem_atual] = rand() % 6 + 1;
+                    anim.face_atual = ordem_resultados[ordem_rolagem_atual];
+                    anim.estado = TURNO_AGUARDANDO;
+                    anim.jitter_x = 0;
+                    anim.jitter_y = 0;
                     ordem_rolagem_atual++;
                     ordem_timer_dado = 0.0f;
                 }
             } else {
                 ordem_timer_dado += dt;
+                anim.estado = TURNO_AGUARDANDO;
                 if (ordem_timer_dado > 3.0f || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { // Espera mostrar o resultado
                     /* Ordena os jogadores baseado no dado rolado (Insertion Sort para O(N^2) mas como N=4 é constante) */
                     for (int i = 1; i < NUM_JOGADORES; i++) {
@@ -239,6 +261,7 @@ int main(void)
                     }
 
                     jogador_atual   = 0;
+                    hud_jogador_focado = -1;
                     bot_delay       = -1.0f;
                     turno_terminado = 0;
                     anim            = (AnimacaoTurno){0};
@@ -253,6 +276,25 @@ int main(void)
 
         /* ---- JOGO ---- */
         case TELA_JOGO: {
+            /* Controle do HUD (mouse e teclado) */
+            if (IsKeyPressed(KEY_ONE)   || IsKeyPressed(KEY_KP_1)) hud_jogador_focado = 0;
+            if (IsKeyPressed(KEY_TWO)   || IsKeyPressed(KEY_KP_2)) hud_jogador_focado = 1;
+            if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) hud_jogador_focado = 2;
+            if (IsKeyPressed(KEY_FOUR)  || IsKeyPressed(KEY_KP_4)) hud_jogador_focado = 3;
+            if (IsKeyPressed(KEY_ESCAPE)) hud_jogador_focado = -1;
+            
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                /* Verifica cliques na lista de jogadores do HUD */
+                int hx = 962, hy = 352; /* Posição Y onde começa a mini-lista em render_hud */
+                for (int i = 0; i < NUM_JOGADORES; i++) {
+                    Rectangle br = { hx, hy - 2, 308 - 10, 20 };
+                    if (CheckCollisionPointRec(mouse, br)) {
+                        hud_jogador_focado = i;
+                    }
+                    hy += 20;
+                }
+            }
+
             /* 1. Avança turno se o anterior terminou */
             if (turno_terminado) {
                 if (jogador_venceu(J_ATUAL)) {
@@ -630,25 +672,38 @@ int main(void)
             tw = MeasureText(sub, 22);
             DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
 
-            int py = 300;
-            for (int i = 0; i < NUM_JOGADORES; i++) {
+            if (ordem_rolagem_atual < NUM_JOGADORES) {
+                /* Exibe apenas o jogador atual rolando no centro da tela */
+                int p = ordem_rolagem_atual;
                 char texto[64];
-                if (i < ordem_rolagem_atual) {
-                    snprintf(texto, sizeof(texto), "%s: %d", jogadores[i].nome, ordem_resultados[i]);
-                } else if (i == ordem_rolagem_atual) {
-                    snprintf(texto, sizeof(texto), "%s: %d", jogadores[i].nome, anim.face_atual);
-                } else {
-                    snprintf(texto, sizeof(texto), "%s: -", jogadores[i].nome);
-                }
+                snprintf(texto, sizeof(texto), "%s", jogadores[p].nome);
                 
-                Color cor = (i == ordem_rolagem_atual) ? COR_PINO[i] : WHITE;
-                tw = MeasureText(texto, 24);
-                DrawText(texto, LARGURA/2 - tw/2, py, 24, cor);
-
-                py += 40;
-            }
-
-            if (ordem_rolagem_atual >= NUM_JOGADORES) {
+                int tw = MeasureText(texto, 32);
+                int start_x = LARGURA / 2 - tw / 2 - 40; // Desloca para a esquerda para acomodar o dado
+                int py = 320;
+                
+                DrawText(texto, start_x, py, 32, COR_PINO[p]);
+                DrawText("Rolando...", start_x, py + 40, 20, (Color){200, 200, 200, 255});
+                
+                /* Desenha o dado animado ao lado do nome */
+                render_dado_simples(anim.face_atual, start_x + tw + 60, py + 25, 40, anim.jitter_x, anim.jitter_y, 1);
+                
+            } else {
+                /* Exibe a lista final ordenada */
+                int py = 250;
+                const char *titulo = "Ordem Definida!";
+                int tw = MeasureText(titulo, 32);
+                DrawText(titulo, LARGURA/2 - tw/2, py, 32, COR_TITULO);
+                py += 60;
+                
+                for (int i = 0; i < NUM_JOGADORES; i++) {
+                    char texto[64];
+                    snprintf(texto, sizeof(texto), "%d. %s (Tirou %d)", i + 1, jogadores[i].nome, ordem_resultados[i]);
+                    
+                    tw = MeasureText(texto, 24);
+                    DrawText(texto, LARGURA/2 - tw/2, py, 24, COR_PINO[i]);
+                    py += 40;
+                }
                 const char *hint = "Resultados ordenados! Pressione [ESPACO] para iniciar.";
                 tw = MeasureText(hint, 18);
                 DrawText(hint, LARGURA/2 - tw/2, py + 40, 18, COR_TITULO);
@@ -659,7 +714,7 @@ int main(void)
         /* ---- JOGO ---- */
         case TELA_JOGO:
             render_tabuleiro(tabuleiro, jogadores, NUM_JOGADORES, jogador_atual, &anim);
-            render_hud(jogadores, NUM_JOGADORES, jogador_atual, ultimo_dado);
+            render_hud(jogadores, NUM_JOGADORES, jogador_atual, hud_jogador_focado, ultimo_dado);
             render_dado(&anim);
             render_carta_overlay(&anim);
             render_propriedade_overlay(&anim, J_ATUAL);
