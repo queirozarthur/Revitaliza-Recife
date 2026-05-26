@@ -89,6 +89,11 @@ int main(void)
     textura_costas_cartas[0] = LoadTexture("assets/Carta_Sorte_Verso.png");
     textura_costas_cartas[1] = LoadTexture("assets/Carta_Azar_Verso.png");
     textura_costas_cartas[2] = LoadTexture("assets/Carta_Verso_Evento.png");
+    
+    textura_cartas_acao[0] = LoadTexture("assets/Carta_Acao_1.png");
+    textura_cartas_acao[1] = LoadTexture("assets/Carta_Acao_2.png");
+    textura_cartas_acao[2] = LoadTexture("assets/Carta_Acao_3.png");
+    textura_cartas_acao[3] = LoadTexture("assets/Carta_Acao_4.png");
 
     int num_humanos = 1;
     int selecao_fase = 0; // 0: num_humanos, 1: escolhendo avatares
@@ -308,6 +313,9 @@ int main(void)
                     break;
                 }
                 jogador_atual   = (jogador_atual + 1) % NUM_JOGADORES;
+                if (J_ATUAL->turnos_festa > 0) {
+                    J_ATUAL->turnos_festa--;
+                }
                 bot_delay       = -1.0f;
                 turno_terminado = 0;
             }
@@ -323,15 +331,46 @@ int main(void)
                             J_ATUAL->turnos_bloqueado--;
                             turno_terminado = 1;
                         } else {
-                            iniciar_dado(&anim, &ultimo_dado);
+                            // Bot intelligence for Action Cards (25% chance to use a card if has one)
+                            int has_card = (J_ATUAL->cartas_acao[0] != -1 || J_ATUAL->cartas_acao[1] != -1);
+                            if (has_card && GetRandomValue(1, 100) <= 25) {
+                                int slot = (J_ATUAL->cartas_acao[0] != -1) ? 0 : 1;
+                                if (J_ATUAL->cartas_acao[0] != -1 && J_ATUAL->cartas_acao[1] != -1) {
+                                    slot = GetRandomValue(0, 1);
+                                }
+                                anim.acao_slot = slot;
+                                anim.acao_carta_id = J_ATUAL->cartas_acao[slot];
+                                anim.acao_alvo_idx = (jogador_atual + 1) % NUM_JOGADORES; // Default target
+                                anim.estado = TURNO_USANDO_ACAO;
+                            } else {
+                                iniciar_dado(&anim, &ultimo_dado);
+                            }
                         }
                     }
                 } else {
-                    if (IsKeyPressed(KEY_SPACE)) {
-                        if (J_ATUAL->turnos_bloqueado > 0) {
+                    if (J_ATUAL->turnos_bloqueado > 0) {
+                        if (IsKeyPressed(KEY_SPACE)) {
                             J_ATUAL->turnos_bloqueado--;
                             turno_terminado = 1;
-                        } else {
+                        }
+                    } else {
+                        // Check Action Card Clicks
+                        Vector2 mouse = GetMousePosition();
+                        int clicou_carta = 0;
+                        for (int i=0; i<2; i++) {
+                            if (J_ATUAL->cartas_acao[i] != -1) {
+                                Rectangle rect = obter_rect_carta_acao(i, 0);
+                                if (CheckCollisionPointRec(mouse, rect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                                    anim.acao_slot = i;
+                                    anim.acao_carta_id = J_ATUAL->cartas_acao[i];
+                                    anim.acao_alvo_idx = (jogador_atual + 1) % NUM_JOGADORES;
+                                    anim.estado = TURNO_USANDO_ACAO;
+                                    clicou_carta = 1;
+                                }
+                            }
+                        }
+                        
+                        if (!clicou_carta && IsKeyPressed(KEY_SPACE)) {
                             iniciar_dado(&anim, &ultimo_dado);
                         }
                     }
@@ -510,7 +549,8 @@ int main(void)
                     if (IsKeyPressed(KEY_C) &&
                         J_ATUAL->moedas >= anim.casa_ativa->custo) {
                         J_ATUAL->moedas -= anim.casa_ativa->custo;
-                        J_ATUAL->pontos[anim.casa_ativa->setor] += anim.casa_ativa->pontos;
+                        int multi = J_ATUAL->turnos_festa > 0 ? 2 : 1;
+                        J_ATUAL->pontos[anim.casa_ativa->setor] += anim.casa_ativa->pontos * multi;
                         anim.casa_ativa->proprietario = jogador_atual;
                         anim.casa_ativa = NULL;
                         anim.estado     = TURNO_AGUARDANDO;
@@ -544,7 +584,8 @@ int main(void)
                         /* Bot compra se tiver moedas */
                         if (J_ATUAL->moedas >= anim.casa_ativa->custo) {
                             J_ATUAL->moedas -= anim.casa_ativa->custo;
-                            J_ATUAL->pontos[anim.casa_ativa->setor] += anim.casa_ativa->pontos;
+                            int multi = J_ATUAL->turnos_festa > 0 ? 2 : 1;
+                            J_ATUAL->pontos[anim.casa_ativa->setor] += anim.casa_ativa->pontos * multi;
                             anim.casa_ativa->proprietario = jogador_atual;
                         }
                     } else {
@@ -558,6 +599,35 @@ int main(void)
                     anim.casa_ativa = NULL;
                     anim.estado     = TURNO_AGUARDANDO;
                     turno_terminado = 1;
+                }
+            }
+        }
+        
+        /* Uso de Carta de Ação */
+        if (anim.estado == TURNO_USANDO_ACAO) {
+            if (!IS_BOT) {
+                if (IsKeyPressed(KEY_ESCAPE)) {
+                    anim.estado = TURNO_AGUARDANDO;
+                } else if (IsKeyPressed(KEY_ENTER)) {
+                    usar_carta_acao(jogadores, NUM_JOGADORES, jogador_atual, anim.acao_carta_id, anim.acao_alvo_idx, tabuleiro);
+                    J_ATUAL->cartas_acao[anim.acao_slot] = -1;
+                    anim.estado = TURNO_AGUARDANDO;
+                } else if (anim.acao_carta_id == 3) {
+                    for (int i = 0; i < NUM_JOGADORES; i++) {
+                        if (i == jogador_atual) continue;
+                        if (IsKeyPressed(KEY_ONE + i) || IsKeyPressed(KEY_KP_1 + i)) {
+                            anim.acao_alvo_idx = i;
+                        }
+                    }
+                }
+            } else {
+                if (bot_delay < 0.0f) bot_delay = 1.0f;
+                bot_delay -= dt;
+                if (bot_delay <= 0.0f) {
+                    bot_delay = -1.0f;
+                    usar_carta_acao(jogadores, NUM_JOGADORES, jogador_atual, anim.acao_carta_id, anim.acao_alvo_idx, tabuleiro);
+                    J_ATUAL->cartas_acao[anim.acao_slot] = -1;
+                    anim.estado = TURNO_AGUARDANDO;
                 }
             }
         }
@@ -766,6 +836,8 @@ int main(void)
             render_dado(&anim);
             render_carta_overlay(&anim);
             render_propriedade_overlay(&anim, J_ATUAL);
+            render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
+            render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
             break;
 
         /* ---- RESULTADO ---- */
@@ -845,6 +917,10 @@ int main(void)
 sair:
     for (int i = 0; i < 4; i++) {
         if (texturas_avatar[i].id != 0) UnloadTexture(texturas_avatar[i]);
+        if (textura_cartas_acao[i].id != 0) UnloadTexture(textura_cartas_acao[i]);
+    }
+    for (int i = 0; i < 3; i++) {
+        if (textura_costas_cartas[i].id != 0) UnloadTexture(textura_costas_cartas[i]);
     }
     if (textura_tabuleiro.id != 0) UnloadTexture(textura_tabuleiro);
     if (tabuleiro) tabuleiro_destruir(tabuleiro);

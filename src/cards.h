@@ -65,4 +65,6 @@ Casa *carta_aplicar_efeito(const Carta *carta,
                            int idx_atual,
                            const Tabuleiro *tab);
 
+void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, int acao_id, int alvo_idx, Tabuleiro *tab);
+
 #endif /* CARDS_H */

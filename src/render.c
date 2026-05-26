@@ -34,6 +34,7 @@ const Color COR_PINO[4] = {
 Texture2D texturas_avatar[4] = {0};
 Texture2D textura_tabuleiro = {0};
 Texture2D textura_costas_cartas[3] = {0};
+Texture2D textura_cartas_acao[4] = {0};
 
 /* Offsets por jogador para evitar sobreposição na mesma casa */
 static const float PINO_OX[4] = {-7.0f,  7.0f, -7.0f,  7.0f};
@@ -851,4 +852,106 @@ void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogado
             DrawText(nota, PX+PW/2-tw/2, PY+PH-34, 12, (Color){220,80,80,200});
         }
     }
+}
+
+Rectangle obter_rect_carta_acao(int slot, int hover) {
+    float cw = 120, ch = 180; 
+    float x = 200 + slot * 140; 
+    float y = hover ? 720 - ch + 40 : 720 - 60; 
+    return (Rectangle){x, y, cw, ch};
+}
+
+void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim, Font fonte) {
+    if (anim->estado != TURNO_AGUARDANDO && anim->estado != TURNO_USANDO_ACAO) return;
+    if (j->tipo != TIPO_HUMANO) return;
+    
+    Vector2 mouse = GetMousePosition();
+    for (int i=0; i<2; i++) {
+        int c_id = j->cartas_acao[i];
+        if (c_id == -1) continue;
+        
+        Rectangle rect = obter_rect_carta_acao(i, 0);
+        int hover = CheckCollisionPointRec(mouse, rect);
+        if (hover || (anim->estado == TURNO_USANDO_ACAO && anim->acao_slot == i)) {
+            rect = obter_rect_carta_acao(i, 1);
+            hover = 1;
+        }
+        
+        Texture2D tex = textura_cartas_acao[c_id];
+        if (tex.id != 0) {
+            float crop_w = tex.height * (2.0f/3.0f);
+            Rectangle src = { (tex.width - crop_w)/2.0f, 0, crop_w, tex.height };
+            DrawTexturePro(tex, src, rect, (Vector2){0,0}, 0.0f, WHITE);
+        } else {
+            DrawRectangleRec(rect, DARKGRAY);
+        }
+        
+        DrawRectangleLinesEx(rect, 3, hover ? WHITE : (Color){100,100,100,255});
+        
+        if (hover && anim->estado == TURNO_AGUARDANDO) {
+            DrawText(TextFormat("[ %d ]", i+1), rect.x + rect.width/2 - 15, rect.y - 25, 20, WHITE);
+        }
+    }
+}
+
+void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atual, AnimacaoTurno *anim, Font fonte) {
+    if (anim->estado != TURNO_USANDO_ACAO) return;
+    
+    DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 200});
+    
+    int c_id = anim->acao_carta_id;
+    Texture2D tex = textura_cartas_acao[c_id];
+    
+    float cw = 280, ch = 420;
+    float cx = 479 - cw/2, cy = 360 - ch/2;
+    Rectangle rect = {cx, cy, cw, ch};
+    
+    if (tex.id != 0) {
+        float crop_w = tex.height * (2.0f/3.0f);
+        Rectangle src = { (tex.width - crop_w)/2.0f, 0, crop_w, tex.height };
+        DrawTexturePro(tex, src, rect, (Vector2){0,0}, 0.0f, WHITE);
+    } else {
+        DrawRectangleRec(rect, DARKGRAY);
+    }
+    
+    Rectangle box = { cx + cw + 40, cy + 50, 420, 320 };
+    DrawRectangleRounded(box, 0.1f, 10, (Color){40, 40, 60, 240});
+    DrawRectangleLinesEx(box, 3, WHITE);
+    
+    const char *title = "";
+    const char *desc = "";
+    if (c_id == 0) {
+        title = "Ação de Turismo";
+        desc = "Ganha +1 ponto de turismo.\nGanha +1 adicional para cada\npropriedade de turismo.";
+    } else if (c_id == 1) {
+        title = "Recife em Festa";
+        desc = "Pelos próximos 2 turnos,\ntodos os seus pontos ganhos\nsão dobrados!";
+    } else if (c_id == 2) {
+        title = "Ação de Comércio";
+        desc = "Ganha +1 ponto de comércio.\nGanha +1 adicional para cada\npropriedade de comércio.";
+    } else if (c_id == 3) {
+        title = "Parceria Estratégica";
+        desc = "Escolha um jogador parceiro.\nAmbos ganham +1 em tudo.\n+1 bônus extra se tiverem\nsetores diferentes!";
+    }
+    
+    DrawTextEx(fonte, title, (Vector2){box.x + 20, box.y + 20}, 24, 1, WHITE);
+    DrawTextEx(fonte, desc, (Vector2){box.x + 20, box.y + 60}, 20, 1, LIGHTGRAY);
+    
+    if (c_id == 3) {
+        DrawTextEx(fonte, "Escolha um alvo:", (Vector2){box.x + 20, box.y + 150}, 20, 1, GOLD);
+        int y_offset = 180;
+        for (int i=0; i<num_jogadores; i++) {
+            if (i == jogador_atual) continue;
+            Color c = (anim->acao_alvo_idx == i) ? (Color){40,160,80,255} : (Color){60,60,80,255};
+            DrawRectangleRounded((Rectangle){box.x + 20, box.y + y_offset, 380, 30}, 0.2f, 5, c);
+            DrawText(TextFormat("[%d] %s", i+1, jogadores[i].nome), box.x + 30, box.y + y_offset + 5, 20, WHITE);
+            y_offset += 40;
+        }
+    }
+    
+    DrawRectangleRounded((Rectangle){box.x + 20, box.y + 260, 180, 40}, 0.2f, 5, (Color){40,160,80,255});
+    DrawText("[ENTER] Confirmar", box.x + 35, box.y + 270, 16, WHITE);
+    
+    DrawRectangleRounded((Rectangle){box.x + 220, box.y + 260, 180, 40}, 0.2f, 5, (Color){160,40,40,255});
+    DrawText("[ESC] Cancelar", box.x + 255, box.y + 270, 16, WHITE);
 }

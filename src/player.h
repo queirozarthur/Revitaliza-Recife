@@ -18,6 +18,8 @@ typedef struct {
     int         turnos_bloqueado;
     TipoJogador tipo;
     int         avatar_id; // 0=Frevo, 1=Manguebeat, 2=Monumento, 3=Tecnologia
+    int         cartas_acao[2]; // IDs: 0 a 3, ou -1 se vazio
+    int         turnos_festa;   // Dobro de pontos por N rodadas
 } Jogador;
 
 Jogador jogador_criar(const char *nome, Casa *inicio, TipoJogador tipo, int avatar_id);

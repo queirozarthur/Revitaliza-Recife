@@ -189,7 +189,7 @@ Casa *carta_aplicar_efeito(const Carta *carta,
     switch (carta->efeito) {
 
         case EFEITO_GANHAR_PONTOS:
-            j->pontos[carta->setor] += carta->valor;
+            j->pontos[carta->setor] += carta->valor * (j->turnos_festa > 0 ? 2 : 1);
             break;
 
         case EFEITO_PERDER_PONTOS:
@@ -220,8 +220,10 @@ Casa *carta_aplicar_efeito(const Carta *carta,
             break;
 
         case EFEITO_TODOS_GANHAM_PONTOS:
-            for (int i = 0; i < num_jogadores; i++)
-                jogadores[i].pontos[carta->setor] += carta->valor;
+            for (int i = 0; i < num_jogadores; i++) {
+                int multi = jogadores[i].turnos_festa > 0 ? 2 : 1;
+                jogadores[i].pontos[carta->setor] += carta->valor * multi;
+            }
             break;
 
         case EFEITO_TODOS_PERDEM_MOEDAS:
@@ -236,7 +238,8 @@ Casa *carta_aplicar_efeito(const Carta *carta,
                 Casa *c = tab->cabeca;
                 do {
                     if (c->setor == carta->setor && c->proprietario == i) {
-                        jogadores[i].pontos[carta->setor] += carta->valor;
+                        int multi = jogadores[i].turnos_festa > 0 ? 2 : 1;
+                        jogadores[i].pontos[carta->setor] += carta->valor * multi;
                         break;
                     }
                     c = c->next;
@@ -246,4 +249,74 @@ Casa *carta_aplicar_efeito(const Carta *carta,
     }
 
     return NULL;
+}
+
+void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, int acao_id, int alvo_idx, Tabuleiro *tab) {
+    Jogador *j = &jogadores[jogador_atual];
+    int multi = (j->turnos_festa > 0 && acao_id != 1) ? 2 : 1;
+    
+    if (acao_id == 0) {
+        // Turismo
+        j->pontos[SETOR_TURISMO] += 1 * multi;
+        Casa *c = tab->cabeca;
+        do {
+            if (c->tipo == CASA_PROPRIEDADE && c->setor == SETOR_TURISMO && c->proprietario == jogador_atual) {
+                j->pontos[SETOR_TURISMO] += 1 * multi;
+            }
+            c = c->next;
+        } while (c != tab->cabeca);
+    } else if (acao_id == 1) {
+        // Festa (2 rounds)
+        j->turnos_festa = 2;
+    } else if (acao_id == 2) {
+        // Comercio
+        j->pontos[SETOR_COMERCIO] += 1 * multi;
+        Casa *c = tab->cabeca;
+        do {
+            if (c->tipo == CASA_PROPRIEDADE && c->setor == SETOR_COMERCIO && c->proprietario == jogador_atual) {
+                j->pontos[SETOR_COMERCIO] += 1 * multi;
+            }
+            c = c->next;
+        } while (c != tab->cabeca);
+    } else if (acao_id == 3) {
+        // Parceria
+        if (alvo_idx >= 0 && alvo_idx < num_jogadores && alvo_idx != jogador_atual) {
+            Jogador *alvo = &jogadores[alvo_idx];
+            int a_multi = alvo->turnos_festa > 0 ? 2 : 1;
+            
+            j->pontos[SETOR_TECNOLOGIA] += 1 * multi;
+            j->pontos[SETOR_TURISMO] += 1 * multi;
+            j->pontos[SETOR_COMERCIO] += 1 * multi;
+            alvo->pontos[SETOR_TECNOLOGIA] += 1 * a_multi;
+            alvo->pontos[SETOR_TURISMO] += 1 * a_multi;
+            alvo->pontos[SETOR_COMERCIO] += 1 * a_multi;
+            
+            int j_setores[4] = {0};
+            int a_setores[4] = {0};
+            Casa *c = tab->cabeca;
+            do {
+                if (c->tipo == CASA_PROPRIEDADE && c->proprietario == jogador_atual) j_setores[c->setor] = 1;
+                if (c->tipo == CASA_PROPRIEDADE && c->proprietario == alvo_idx) a_setores[c->setor] = 1;
+                c = c->next;
+            } while (c != tab->cabeca);
+            
+            int diff_sectors = 0;
+            for (int s=1; s<=3; s++) {
+                if (j_setores[s]) {
+                    for (int s2=1; s2<=3; s2++) {
+                        if (a_setores[s2] && s != s2) { diff_sectors = 1; break; }
+                    }
+                }
+            }
+            
+            if (diff_sectors) {
+                j->pontos[SETOR_TECNOLOGIA] += 1 * multi;
+                j->pontos[SETOR_TURISMO] += 1 * multi;
+                j->pontos[SETOR_COMERCIO] += 1 * multi;
+                alvo->pontos[SETOR_TECNOLOGIA] += 1 * a_multi;
+                alvo->pontos[SETOR_TURISMO] += 1 * a_multi;
+                alvo->pontos[SETOR_COMERCIO] += 1 * a_multi;
+            }
+        }
+    }
 }
