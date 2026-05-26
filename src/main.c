@@ -54,9 +54,6 @@ int main(void)
     Tabuleiro     *tabuleiro = tabuleiro_criar();
     SistemaCartas *cartas    = cartas_criar();
     Jogador        jogador   = jogador_criar("Jogador 1", tabuleiro->cabeca);
-    Tabuleiro     *tabuleiro = tabuleiro_criar();
-    SistemaCartas *cartas    = cartas_criar();
-    Jogador        jogador   = jogador_criar("Jogador 1", tabuleiro->cabeca);
 
     AnimacaoTurno anim    = {0};
     anim.estado           = TURNO_AGUARDANDO;
@@ -180,7 +177,6 @@ int main(void)
                 DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
 
                 int tw = MeasureText("REVITALIZA RECIFE", 50);
-                DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 50, COR_TITULO);
                 DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 50, COR_TITULO);
                 tw = MeasureText("Revitalize a cidade. Conquiste o futuro.", 20);
                 DrawText("Revitalize a cidade. Conquiste o futuro.",
