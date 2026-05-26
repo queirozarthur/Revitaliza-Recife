@@ -522,7 +522,7 @@ void render_dado(const AnimacaoTurno *anim)
     const int CY   = BY + CS + (5*SH) / 2;
     const int RAIO = 52;
 
-    DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){0, 0, 0, 150});
+    DrawRectangle(IMG_X, IMG_Y, IMG_W, IMG_H, (Color){0, 0, 0, 150});
 
     render_dado_simples(anim->face_atual, CX, CY, RAIO, anim->jitter_x, anim->jitter_y, anim->estado == TURNO_PINO_MOVENDO);
 
