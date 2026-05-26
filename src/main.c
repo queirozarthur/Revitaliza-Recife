@@ -4,15 +4,13 @@
 #include "player.h"
 #include "render.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 #define LARGURA  1280
 #define ALTURA    720
 
 typedef enum { TELA_MENU, TELA_JOGO, TELA_RESULTADO } TelaJogo;
 
-/* ------------------------------------------------------------------ */
-/* Paleta do menu                                                       */
-/* ------------------------------------------------------------------ */
 #define COR_FUNDO      (Color){ 10,  20,  40, 255}
 #define COR_TITULO     (Color){255, 140,  30, 255}
 #define COR_SUBTITULO  (Color){180, 210, 255, 255}
@@ -53,6 +51,9 @@ int main(void)
     InitWindow(LARGURA, ALTURA, "Revitaliza Recife — Porto Digital");
     SetTargetFPS(60);
 
+    Tabuleiro     *tabuleiro = tabuleiro_criar();
+    SistemaCartas *cartas    = cartas_criar();
+    Jogador        jogador   = jogador_criar("Jogador 1", tabuleiro->cabeca);
     Tabuleiro     *tabuleiro = tabuleiro_criar();
     SistemaCartas *cartas    = cartas_criar();
     Jogador        jogador   = jogador_criar("Jogador 1", tabuleiro->cabeca);
@@ -163,7 +164,6 @@ int main(void)
                     }
                 }
                 break;
-
             case TELA_RESULTADO:
                 if (IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
                 break;
@@ -180,6 +180,7 @@ int main(void)
                 DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
 
                 int tw = MeasureText("REVITALIZA RECIFE", 50);
+                DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 50, COR_TITULO);
                 DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 50, COR_TITULO);
                 tw = MeasureText("Revitalize a cidade. Conquiste o futuro.", 20);
                 DrawText("Revitalize a cidade. Conquiste o futuro.",
@@ -214,6 +215,10 @@ int main(void)
                 break;
 
             case TELA_RESULTADO:
+                DrawText("FIM DE JOGO",
+                         LARGURA/2 - 120, ALTURA/2 - 30, 40, COR_TITULO);
+                DrawText("[ENTER] Voltar ao menu",
+                         LARGURA/2 - 140, ALTURA/2 + 30, 20, COR_SUBTITULO);
                 DrawText("FIM DE JOGO",
                          LARGURA/2 - 120, ALTURA/2 - 30, 40, COR_TITULO);
                 DrawText("[ENTER] Voltar ao menu",
