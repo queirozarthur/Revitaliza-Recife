@@ -155,6 +155,18 @@ int main(void)
 
                         if (anim.passos_restantes <= 0) {
                             anim.estado = TURNO_AGUARDANDO;
+
+                            /* Aplica o efeito da casa onde o pino parou */
+                            const Carta *carta = NULL;
+                            switch (jogador.posicao->tipo) {
+                                case CASA_SORTE:  carta = cartas_puxar_sorte(cartas);  break;
+                                case CASA_AZAR:   carta = cartas_puxar_azar(cartas);   break;
+                                case CASA_EVENTO: carta = cartas_puxar_evento(cartas); break;
+                                default: break;
+                            }
+                            if (carta)
+                                carta_aplicar_efeito(carta, &jogador, 1, 0, tabuleiro);
+
                         } else {
                             setup_passo(&anim, &jogador);
                         }
