@@ -4,7 +4,7 @@
 #include <math.h>
 
 /* ------------------------------------------------------------------ */
-/* Geometria do tabuleiro (ver diagrama em render.h)                   */
+/* Geometria do tabuleiro                                              */
 /* ------------------------------------------------------------------ */
 #define BX  20
 #define BY  20
@@ -12,7 +12,7 @@
 #define SW 140
 #define SH  88
 
-/* Paleta */
+/* Paleta de setores */
 #define COR_TEC   (Color){ 30, 144, 255, 220}
 #define COR_TUR   (Color){ 60, 179, 113, 220}
 #define COR_COM   (Color){255, 165,   0, 220}
@@ -23,8 +23,20 @@
 #define COR_BORDA (Color){ 70,  90, 130, 255}
 #define COR_PROP  (Color){ 30,  80, 130, 255}
 
+/* Paleta dos pinos por jogador */
+const Color COR_PINO[4] = {
+    {240, 240, 255, 255},  /* J0: branco-azulado */
+    {255, 230,  50, 255},  /* J1: amarelo         */
+    {255, 100, 100, 255},  /* J2: rosa/vermelho   */
+    {100, 220, 150, 255},  /* J3: verde claro     */
+};
+
+/* Offsets por jogador para evitar sobreposição na mesma casa */
+static const float PINO_OX[4] = {-7.0f,  7.0f, -7.0f,  7.0f};
+static const float PINO_OY[4] = {-7.0f, -7.0f,  7.0f,  7.0f};
+
 /* ------------------------------------------------------------------ */
-/* Posicionamento das casas                                             */
+/* Posicionamento das casas                                            */
 /* ------------------------------------------------------------------ */
 Rectangle render_casa_rect(int id)
 {
@@ -92,10 +104,31 @@ static void desenhar_nome(const char *nome, Rectangle r, int font)
     DrawText(nome+split+1, (int)(r.x + r.width/2 - tw2/2), cy + font+2, font, WHITE);
 }
 
+/* Desenha um pino de jogador na posição (px, py) */
+static void desenhar_pino(float px, float py, int idx_jogador,
+                           const Jogador *j, int raio, int destaque)
+{
+    Color cor = COR_PINO[idx_jogador];
+
+    /* Sombra */
+    DrawCircle((int)px + 2, (int)py + 2, raio, (Color){0, 0, 0, 120});
+    /* Corpo */
+    DrawCircle((int)px, (int)py, raio, cor);
+    /* Borda (mais grossa se destaque) */
+    DrawCircleLines((int)px, (int)py, raio,
+                    destaque ? (Color){255, 255, 255, 200} : (Color){30, 30, 60, 200});
+    /* Inicial */
+    char ini[2] = { j->nome[0], '\0' };
+    int  fs = raio - 2;
+    int  iw = MeasureText(ini, fs);
+    DrawText(ini, (int)(px - iw/2), (int)(py - fs/2), fs, (Color){10, 20, 50, 255});
+}
+
 /* ------------------------------------------------------------------ */
 /* render_tabuleiro                                                     */
 /* ------------------------------------------------------------------ */
-void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador,
+void render_tabuleiro(const Tabuleiro *tab,
+                      const Jogador *jogadores, int num_jogadores, int jogador_atual,
                       const AnimacaoTurno *anim)
 {
     if (!tab || !tab->cabeca) return;
@@ -114,7 +147,9 @@ void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador,
         DrawRectangleRec(r, (Color){10, 25, 55, 255});
         DrawRectangleRec(r, cor);
 
-        Color borda = (c->proprietario >= 0) ? WHITE : COR_BORDA;
+        /* Borda colorida com a cor do dono (ou borda padrão) */
+        Color borda = (c->proprietario >= 0 && c->proprietario < num_jogadores)
+                      ? COR_PINO[c->proprietario] : COR_BORDA;
         DrawRectangleLinesEx(r, 2, borda);
 
         char id_str[4];
@@ -124,37 +159,38 @@ void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador,
         desenhar_nome(c->nome, r, 8);
     } while ((c = c->next) != tab->cabeca);
 
-    /* --- Pino com lerp suavizado --- */
-    if (!jogador || !jogador->posicao) return;
+    /* --- Pinos de todos os jogadores --- */
 
-    float px, py;
-
-    if (anim && anim->estado == TURNO_PINO_MOVENDO) {
-        /* Smoothstep: t³(6t²−15t+10)... usamos cúbica simples t²(3−2t) */
+    /* Calcula posição do pino do jogador atual (pode estar animado) */
+    float cur_px = 0, cur_py = 0;
+    if (anim && anim->estado == TURNO_PINO_MOVENDO &&
+        jogadores && jogadores[jogador_atual].posicao) {
         float t = anim->timer_passo / DURACAO_PASSO;
         if (t > 1.0f) t = 1.0f;
         t = t * t * (3.0f - 2.0f * t);
-
-        px = anim->pos_inicio.x + (anim->pos_fim.x - anim->pos_inicio.x) * t;
-        py = anim->pos_inicio.y + (anim->pos_fim.y - anim->pos_inicio.y) * t;
-
-        /* Arco leve: sobe no meio do passo */
-        py -= 14.0f * sinf(t * 3.14159f);
-    } else {
-        Rectangle r = render_casa_rect(jogador->posicao->id);
-        px = r.x + r.width  / 2.0f;
-        py = r.y + r.height / 2.0f;
+        cur_px = anim->pos_inicio.x + (anim->pos_fim.x - anim->pos_inicio.x) * t;
+        cur_py = anim->pos_inicio.y + (anim->pos_fim.y - anim->pos_inicio.y) * t;
+        cur_py -= 14.0f * sinf(t * 3.14159f);  /* arco leve */
+    } else if (jogadores && jogadores[jogador_atual].posicao) {
+        Rectangle r = render_casa_rect(jogadores[jogador_atual].posicao->id);
+        cur_px = r.x + r.width/2.0f + PINO_OX[jogador_atual];
+        cur_py = r.y + r.height/2.0f + PINO_OY[jogador_atual];
     }
 
-    /* Sombra */
-    DrawCircle((int)px + 2, (int)py + 2, 14, (Color){0, 0, 0, 120});
-    /* Corpo */
-    DrawCircle((int)px,     (int)py,     14, WHITE);
-    DrawCircleLines((int)px, (int)py,    14, (Color){30, 30, 60, 255});
-    /* Inicial */
-    char ini[2] = { jogador->nome[0], '\0' };
-    int  iw = MeasureText(ini, 14);
-    DrawText(ini, (int)(px - iw/2), (int)(py - 7), 14, (Color){10, 20, 50, 255});
+    /* Desenha jogadores não-atuais primeiro (menores, atrás) */
+    for (int i = 0; i < num_jogadores; i++) {
+        if (i == jogador_atual) continue;
+        if (!jogadores[i].posicao) continue;
+        Rectangle r = render_casa_rect(jogadores[i].posicao->id);
+        float px = r.x + r.width/2.0f  + PINO_OX[i];
+        float py = r.y + r.height/2.0f + PINO_OY[i];
+        desenhar_pino(px, py, i, &jogadores[i], 10, 0);
+    }
+
+    /* Desenha jogador atual por cima (maior, com destaque) */
+    if (jogadores && jogadores[jogador_atual].posicao) {
+        desenhar_pino(cur_px, cur_py, jogador_atual, &jogadores[jogador_atual], 13, 1);
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -168,108 +204,134 @@ static void barra_progresso(int x, int y, int w, int h, float ratio, Color cor)
     DrawRectangleLines(x, y, w, h, (Color){60, 80, 120, 255});
 }
 
-void render_hud(const Jogador *jogador, int ultimo_dado)
+void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
+                int ultimo_dado)
 {
     const int HX = 962, HW = 308;
 
     DrawRectangle(960, 0, 320, 720, (Color){8, 18, 38, 255});
     DrawLineEx((Vector2){960, 0}, (Vector2){960, 720}, 2, (Color){255,140,30,200});
 
-    if (!jogador) return;
+    if (!jogadores) return;
 
+    const Jogador *j = &jogadores[jogador_atual];
     int x = HX, y = 20;
     char buf[64];
 
-    DrawText("STATUS", x, y, 20, (Color){255,140,30,255});
+    /* Título com cor do pino atual */
+    DrawText("STATUS", x, y, 20, COR_PINO[jogador_atual]);
     y += 28;
     DrawLine(x, y, x+HW, y, (Color){255,140,30,80});
-    y += 14;
+    y += 10;
 
-    DrawText(jogador->nome, x, y, 18, (Color){220,235,255,255});
-    y += 36;
+    /* Nome e tipo do jogador atual */
+    const char *tipo_str = (j->tipo == TIPO_BOT) ? " [BOT]" : "";
+    snprintf(buf, sizeof(buf), "%s%s", j->nome, tipo_str);
+    DrawText(buf, x, y, 16, COR_PINO[jogador_atual]);
+    y += 28;
 
+    /* Moedas */
     DrawText("MOEDAS", x, y, 11, (Color){160,160,160,255});
     y += 16;
-    snprintf(buf, sizeof(buf), "$ %d", jogador->moedas);
-    DrawText(buf, x, y, 24, (Color){255,215,0,255});
-    y += 42;
-
-    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
-    y += 14;
-
-    DrawText("PONTOS DE IMPACTO", x, y, 11, (Color){160,160,160,255});
-    y += 20;
-
-    DrawText("TECNOLOGIA", x, y, 13, COR_TEC);
-    snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_TECNOLOGIA], META_PONTOS);
-    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
-    y += 18;
-    barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_TECNOLOGIA]/META_PONTOS, COR_TEC);
-    y += 22;
-
-    DrawText("TURISMO", x, y, 13, COR_TUR);
-    snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_TURISMO], META_PONTOS);
-    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
-    y += 18;
-    barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_TURISMO]/META_PONTOS, COR_TUR);
-    y += 22;
-
-    DrawText("COMERCIO", x, y, 13, COR_COM);
-    snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_COMERCIO], META_PONTOS);
-    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
-    y += 18;
-    barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_COMERCIO]/META_PONTOS, COR_COM);
-    y += 32;
-
-    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
-    y += 14;
-
-    DrawText("POSICAO ATUAL", x, y, 11, (Color){160,160,160,255});
-    y += 18;
-    if (jogador->posicao) {
-        DrawText(jogador->posicao->nome, x, y, 13, (Color){220,235,255,255});
-        y += 20;
-        Color sc = (Color){160,160,160,255};
-        const char *ss = "NEUTRO";
-        switch (jogador->posicao->setor) {
-            case SETOR_TECNOLOGIA: sc = COR_TEC; ss = "TECNOLOGIA"; break;
-            case SETOR_TURISMO:    sc = COR_TUR; ss = "TURISMO";    break;
-            case SETOR_COMERCIO:   sc = COR_COM; ss = "COMERCIO";   break;
-            default: break;
-        }
-        DrawText(ss, x, y, 12, sc);
-    }
+    snprintf(buf, sizeof(buf), "$ %d", j->moedas);
+    DrawText(buf, x, y, 22, (Color){255,215,0,255});
     y += 36;
 
     DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
-    y += 14;
+    y += 10;
 
-    DrawText("ULTIMO DADO", x, y, 11, (Color){160,160,160,255});
+    /* Barras de progresso por setor */
+    DrawText("PONTOS DE IMPACTO", x, y, 11, (Color){160,160,160,255});
     y += 18;
-    if (ultimo_dado > 0) {
-        snprintf(buf, sizeof(buf), "%d", ultimo_dado);
-        DrawText(buf, x, y, 32, (Color){255,140,30,255});
-    } else {
-        DrawText("-", x, y, 32, (Color){100,100,100,255});
-    }
-    y += 56;
+
+    DrawText("TECNOLOGIA", x, y, 12, COR_TEC);
+    snprintf(buf, sizeof(buf), "%d/%d", j->pontos[SETOR_TECNOLOGIA], META_PONTOS);
+    DrawText(buf, x+HW-MeasureText(buf,12), y, 12, WHITE);
+    y += 16;
+    barra_progresso(x, y, HW, 9, (float)j->pontos[SETOR_TECNOLOGIA]/META_PONTOS, COR_TEC);
+    y += 18;
+
+    DrawText("TURISMO", x, y, 12, COR_TUR);
+    snprintf(buf, sizeof(buf), "%d/%d", j->pontos[SETOR_TURISMO], META_PONTOS);
+    DrawText(buf, x+HW-MeasureText(buf,12), y, 12, WHITE);
+    y += 16;
+    barra_progresso(x, y, HW, 9, (float)j->pontos[SETOR_TURISMO]/META_PONTOS, COR_TUR);
+    y += 18;
+
+    DrawText("COMERCIO", x, y, 12, COR_COM);
+    snprintf(buf, sizeof(buf), "%d/%d", j->pontos[SETOR_COMERCIO], META_PONTOS);
+    DrawText(buf, x+HW-MeasureText(buf,12), y, 12, WHITE);
+    y += 16;
+    barra_progresso(x, y, HW, 9, (float)j->pontos[SETOR_COMERCIO]/META_PONTOS, COR_COM);
+    y += 24;
 
     DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
-    y += 14;
+    y += 10;
+
+    /* Mini-lista de todos os jogadores */
+    DrawText("JOGADORES", x, y, 11, (Color){160,160,160,255});
+    y += 16;
+
+    for (int i = 0; i < num_jogadores; i++) {
+        int pts = jogadores[i].pontos[SETOR_TECNOLOGIA]
+                + jogadores[i].pontos[SETOR_TURISMO]
+                + jogadores[i].pontos[SETOR_COMERCIO];
+
+        /* Destaque se for o turno atual */
+        Color cor_nome = (i == jogador_atual)
+                         ? COR_PINO[i]
+                         : (Color){120, 140, 180, 180};
+
+        /* Bolinha colorida */
+        DrawCircle(x + 6, y + 7, 5, COR_PINO[i]);
+
+        snprintf(buf, sizeof(buf), "%-10s  %2dpt  $%d",
+                 jogadores[i].nome, pts, jogadores[i].moedas);
+        DrawText(buf, x + 15, y, 11, cor_nome);
+
+        /* Asterisco no turno atual */
+        if (i == jogador_atual)
+            DrawText("<", x + HW - 10, y, 11, COR_PINO[i]);
+
+        y += 17;
+    }
+
+    y += 6;
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
+    y += 10;
+
+    /* Último dado */
+    DrawText("ULTIMO DADO", x, y, 11, (Color){160,160,160,255});
+    y += 16;
+    if (ultimo_dado > 0) {
+        snprintf(buf, sizeof(buf), "%d", ultimo_dado);
+        DrawText(buf, x, y, 30, (Color){255,140,30,255});
+    } else {
+        DrawText("-", x, y, 30, (Color){100,100,100,255});
+    }
+    y += 44;
+
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
+    y += 10;
 
     DrawText("CONTROLES", x, y, 11, (Color){160,160,160,255});
-    y += 18;
-    DrawText("[ESPACO]  Rolar dado", x, y, 12, (Color){200,220,255,180});
+    y += 16;
+    if (j->tipo == TIPO_HUMANO) {
+        if (j->turnos_bloqueado > 0) {
+            snprintf(buf, sizeof(buf), "[ESPACO]  Pular turno (%d)", j->turnos_bloqueado);
+            DrawText(buf, x, y, 11, (Color){220,80,80,180});
+        } else {
+            DrawText("[ESPACO]  Rolar dado", x, y, 11, (Color){200,220,255,180});
+        }
+    } else {
+        DrawText("Bot pensando...", x, y, 11, (Color){160,200,160,180});
+    }
 }
 
 /* ------------------------------------------------------------------ */
 /* render_dado                                                          */
 /* ------------------------------------------------------------------ */
 
-/* Posições dos pontos em frações do raio do dado, por face */
 static const struct { int n; float x[6]; float y[6]; } FACES[7] = {
     {0},
     {1, {0.00f},                                      {0.00f}                                     },
@@ -299,32 +361,27 @@ void render_dado(const AnimacaoTurno *anim)
 {
     if (!anim || anim->estado == TURNO_AGUARDANDO) return;
 
-    /* Centro da área interna do tabuleiro */
-    const int CX   = BX + CS + (5*SW) / 2;   /* 480 */
-    const int CY   = BY + CS + (5*SH) / 2;   /* 350 */
+    const int CX   = BX + CS + (5*SW) / 2;
+    const int CY   = BY + CS + (5*SH) / 2;
     const int RAIO = 52;
 
     int cx = CX + anim->jitter_x;
     int cy = CY + anim->jitter_y;
 
-    /* Overlay escuro atrás do dado */
     DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){0, 0, 0, 150});
 
-    /* Sombra */
     DrawRectangleRounded(
         (Rectangle){(float)(cx - RAIO + 5), (float)(cy - RAIO + 5),
                     (float)(2*RAIO),         (float)(2*RAIO)},
         0.18f, 6, (Color){0, 0, 0, 100}
     );
 
-    /* Corpo do dado */
     DrawRectangleRounded(
         (Rectangle){(float)(cx - RAIO), (float)(cy - RAIO),
                     (float)(2*RAIO),    (float)(2*RAIO)},
         0.18f, 6, (Color){240, 240, 250, 255}
     );
 
-    /* Borda laranja quando parado (resultado fixo) */
     Color borda = (anim->estado == TURNO_PINO_MOVENDO)
                   ? (Color){255, 140, 30, 255}
                   : (Color){180, 180, 200, 255};
@@ -334,10 +391,8 @@ void render_dado(const AnimacaoTurno *anim)
         0.18f, 6, borda
     );
 
-    /* Pontos da face */
     desenhar_pontos_dado(anim->face_atual, (float)cx, (float)cy, (float)RAIO);
 
-    /* Quando o pino está movendo: mostra resultado + passos restantes */
     if (anim->estado == TURNO_PINO_MOVENDO) {
         char txt[24];
         snprintf(txt, sizeof(txt), "%d passo%s",
@@ -352,7 +407,6 @@ void render_dado(const AnimacaoTurno *anim)
 /* render_carta_overlay                                                 */
 /* ------------------------------------------------------------------ */
 
-/* Quebra texto em linhas respeitando max_width */
 static int wrap_text(const char *text, int max_width, int font_size,
                      char lines[][128], int max_lines)
 {
@@ -361,7 +415,6 @@ static int wrap_text(const char *text, int max_width, int font_size,
     char cur[128] = {0};
 
     while (*p && n < max_lines) {
-        /* Acumula palavras até ultrapassar a largura */
         const char *word = p;
         while (*p && *p != ' ') p++;
 
@@ -370,7 +423,7 @@ static int wrap_text(const char *text, int max_width, int font_size,
         if (wlen >= 63) wlen = 63;
         strncpy(word_buf, word, (size_t)wlen);
 
-        char test[256];   /* amplo o suficiente para cur+space+word */
+        char test[256];
         if (cur[0]) {
             snprintf(test, sizeof(test), "%s %s", cur, word_buf);
         } else {
@@ -428,7 +481,6 @@ void render_carta_overlay(const AnimacaoTurno *anim)
 
     const Carta *c = anim->carta_ativa;
 
-    /* Cores por tipo */
     Color cor_tipo, cor_borda;
     const char *tipo_str;
     switch (c->tipo) {
@@ -442,57 +494,47 @@ void render_carta_overlay(const AnimacaoTurno *anim)
             cor_borda = (Color){220,  60,  60, 255};
             tipo_str  = "AZAR";
             break;
-        default: /* EVENTO */
+        default:
             cor_tipo  = (Color){160, 100, 220, 255};
             cor_borda = (Color){160, 100, 220, 255};
             tipo_str  = "EVENTO";
             break;
     }
 
-    /* Dimensões do painel */
     const int PW = 500, PH = 380;
     const int PX = (1280 - PW) / 2;
     const int PY = (720  - PH) / 2;
 
-    /* Overlay escuro */
     DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 170});
 
-    /* Sombra do painel */
     DrawRectangleRounded(
         (Rectangle){(float)(PX+6), (float)(PY+6), (float)PW, (float)PH},
         0.06f, 8, (Color){0, 0, 0, 120});
 
-    /* Fundo do painel */
     DrawRectangleRounded(
         (Rectangle){(float)PX, (float)PY, (float)PW, (float)PH},
         0.06f, 8, (Color){12, 22, 48, 255});
 
-    /* Borda colorida */
     DrawRectangleRoundedLines(
         (Rectangle){(float)PX, (float)PY, (float)PW, (float)PH},
         0.06f, 8, cor_borda);
 
-    /* Cabeçalho colorido */
     DrawRectangleRounded(
         (Rectangle){(float)PX, (float)PY, (float)PW, 64.0f},
         0.06f, 8, cor_tipo);
-    /* Cobre cantos inferiores do header para ficar reto embaixo */
     DrawRectangle(PX, PY + 44, PW, 20, cor_tipo);
 
     int tw = MeasureText(tipo_str, 26);
     DrawText(tipo_str, PX + PW/2 - tw/2, PY + 18, 26, WHITE);
 
-    /* Título */
     int ty = PY + 80;
     tw = MeasureText(c->titulo, 22);
     DrawText(c->titulo, PX + PW/2 - tw/2, ty, 22, WHITE);
 
-    /* Linha separadora */
     ty += 36;
     DrawLine(PX + 20, ty, PX + PW - 20, ty, (Color){60, 80, 120, 255});
     ty += 14;
 
-    /* Descrição (com quebra de linha) */
     char linhas[4][128] = {{0}};
     int  n = wrap_text(c->descricao, PW - 60, 14, linhas, 4);
     for (int i = 0; i < n; i++) {
@@ -501,18 +543,15 @@ void render_carta_overlay(const AnimacaoTurno *anim)
         ty += 20;
     }
 
-    /* Linha separadora */
     ty += 6;
     DrawLine(PX + 20, ty, PX + PW - 20, ty, (Color){60, 80, 120, 255});
     ty += 16;
 
-    /* Efeito */
     char resumo[128];
     efeito_resumo(c, resumo, sizeof(resumo));
     tw = MeasureText(resumo, 18);
     DrawText(resumo, PX + PW/2 - tw/2, ty, 18, cor_tipo);
 
-    /* Rodapé */
     const char *hint = "[ESPACO] ou [ENTER]  Continuar";
     tw = MeasureText(hint, 13);
     DrawText(hint, PX + PW/2 - tw/2, PY + PH - 34, 13,
@@ -556,7 +595,6 @@ void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogado
         (Rectangle){(float)PX,(float)PY,(float)PW,(float)PH},
         0.06f, 8, cor_setor);
 
-    /* Cabeçalho */
     DrawRectangleRounded(
         (Rectangle){(float)PX,(float)PY,(float)PW,60.0f},
         0.06f, 8, cor_setor);
@@ -569,12 +607,10 @@ void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogado
     int ty = PY + 76;
     char buf[64];
 
-    /* Nome da propriedade */
     tw = MeasureText(casa->nome, 20);
     DrawText(casa->nome, PX + PW/2 - tw/2, ty, 20, WHITE);
     ty += 30;
 
-    /* Badge do setor */
     int sw = MeasureText(setor_str, 12);
     DrawRectangle(PX + PW/2 - sw/2 - 8, ty - 2, sw + 16, 20, cor_setor);
     DrawText(setor_str, PX + PW/2 - sw/2, ty, 12, WHITE);
@@ -625,7 +661,6 @@ void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogado
         Color cor_c     = pode ? (Color){30,130,60,255} : (Color){40,60,45,255};
         Color cor_c_txt = pode ? WHITE                  : (Color){80,110,85,255};
 
-        /* Botão [C] */
         DrawRectangleRounded(
             (Rectangle){(float)(PX+50),(float)ty,160.0f,44.0f},
             0.22f, 6, cor_c);
@@ -633,7 +668,6 @@ void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogado
         tw = MeasureText(c_txt, 16);
         DrawText(c_txt, PX+50+80-tw/2, ty+14, 16, cor_c_txt);
 
-        /* Botão [X] */
         DrawRectangleRounded(
             (Rectangle){(float)(PX+PW-210),(float)ty,160.0f,44.0f},
             0.22f, 6, (Color){90,30,30,255});

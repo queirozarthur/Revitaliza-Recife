@@ -45,14 +45,21 @@ typedef struct {
 } AnimacaoTurno;
 
 /* ------------------------------------------------------------------ */
+/* Paleta dos pinos (indexada pelo número do jogador 0-3)              */
+/* ------------------------------------------------------------------ */
+extern const Color COR_PINO[4];
+
+/* ------------------------------------------------------------------ */
 /* API de renderização                                                  */
 /* ------------------------------------------------------------------ */
 Rectangle render_casa_rect(int id);
 
-void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador,
+void render_tabuleiro(const Tabuleiro *tab,
+                      const Jogador *jogadores, int num_jogadores, int jogador_atual,
                       const AnimacaoTurno *anim);
 
-void render_hud(const Jogador *jogador, int ultimo_dado);
+void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual,
+                int ultimo_dado);
 
 void render_dado(const AnimacaoTurno *anim);
 
