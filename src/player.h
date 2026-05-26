@@ -17,9 +17,10 @@ typedef struct {
     Casa       *posicao;
     int         turnos_bloqueado;
     TipoJogador tipo;
+    int         avatar_id; // 0=Frevo, 1=Manguebeat, 2=Monumento, 3=Tecnologia
 } Jogador;
 
-Jogador jogador_criar(const char *nome, Casa *inicio, TipoJogador tipo);
+Jogador jogador_criar(const char *nome, Casa *inicio, TipoJogador tipo, int avatar_id);
 int     jogador_venceu(const Jogador *j);
 
 #endif /* PLAYER_H */

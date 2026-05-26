@@ -31,15 +31,44 @@ const Color COR_PINO[4] = {
     {100, 220, 150, 255},  /* J3: verde claro     */
 };
 
+Texture2D texturas_avatar[4] = {0};
+Texture2D textura_tabuleiro = {0};
+
 /* Offsets por jogador para evitar sobreposição na mesma casa */
 static const float PINO_OX[4] = {-7.0f,  7.0f, -7.0f,  7.0f};
 static const float PINO_OY[4] = {-7.0f, -7.0f,  7.0f,  7.0f};
+
+/* Dimensões do tabuleiro com a imagem carregada */
+#define IMG_X 10.0f
+#define IMG_Y 104.0f
+#define IMG_W 938.0f
+#define IMG_H 511.0f
 
 /* ------------------------------------------------------------------ */
 /* Posicionamento das casas                                            */
 /* ------------------------------------------------------------------ */
 Rectangle render_casa_rect(int id)
 {
+    if (textura_tabuleiro.id != 0) {
+        float b_x = 8.0f; /* margem visual da borda marrom na imagem */
+        float b_y = 8.0f;
+        float cw = (IMG_W - 2.0f * b_x) / 7.0f;
+        float ch = (IMG_H - 2.0f * b_y) / 7.0f;
+        int gx = 0, gy = 0;
+        
+        if (id >= 0 && id <= 6) {
+            gx = id; gy = 6;
+        } else if (id >= 7 && id <= 12) {
+            gx = 6; gy = 6 - (id - 6);
+        } else if (id >= 13 && id <= 18) {
+            gx = 6 - (id - 12); gy = 0;
+        } else if (id >= 19 && id <= 23) {
+            gx = 0; gy = id - 18;
+        }
+        
+        return (Rectangle){IMG_X + b_x + gx * cw, IMG_Y + b_y + gy * ch, cw, ch};
+    }
+
     if (id ==  0) return (Rectangle){BX,           BY + CS + 5*SH, CS, CS};
     if (id ==  6) return (Rectangle){BX + CS+5*SW, BY + CS + 5*SH, CS, CS};
     if (id == 12) return (Rectangle){BX + CS+5*SW, BY,             CS, CS};
@@ -109,19 +138,38 @@ static void desenhar_pino(float px, float py, int idx_jogador,
                            const Jogador *j, int raio, int destaque)
 {
     Color cor = COR_PINO[idx_jogador];
+    int avatar_id = j->avatar_id;
 
     /* Sombra */
     DrawCircle((int)px + 2, (int)py + 2, raio, (Color){0, 0, 0, 120});
-    /* Corpo */
-    DrawCircle((int)px, (int)py, raio, cor);
-    /* Borda (mais grossa se destaque) */
-    DrawCircleLines((int)px, (int)py, raio,
-                    destaque ? (Color){255, 255, 255, 200} : (Color){30, 30, 60, 200});
-    /* Inicial */
-    char ini[2] = { j->nome[0], '\0' };
-    int  fs = raio - 2;
-    int  iw = MeasureText(ini, fs);
-    DrawText(ini, (int)(px - iw/2), (int)(py - fs/2), fs, (Color){10, 20, 50, 255});
+
+    if (avatar_id >= 0 && avatar_id < 4 && texturas_avatar[avatar_id].id != 0) {
+        Rectangle src = {0, 0, (float)texturas_avatar[avatar_id].width, (float)texturas_avatar[avatar_id].height};
+        Rectangle dst = {px, py, raio*2.0f, raio*2.0f};
+        Vector2 origin = {raio, raio};
+        
+        /* Fundo branco para a textura e borda de destaque */
+        DrawCircle((int)px, (int)py, raio, WHITE);
+        DrawTexturePro(texturas_avatar[avatar_id], src, dst, origin, 0.0f, WHITE);
+        
+        /* Borda circular */
+        DrawCircleLines((int)px, (int)py, raio,
+                        destaque ? (Color){255, 255, 255, 220} : cor);
+        if(destaque) {
+            DrawCircleLines((int)px, (int)py, raio+1, cor);
+        }
+    } else {
+        /* Corpo genérico fallback */
+        DrawCircle((int)px, (int)py, raio, cor);
+        /* Borda (mais grossa se destaque) */
+        DrawCircleLines((int)px, (int)py, raio,
+                        destaque ? (Color){255, 255, 255, 200} : (Color){30, 30, 60, 200});
+        /* Inicial */
+        char ini[2] = { j->nome[0], '\0' };
+        int  fs = raio - 2;
+        int  iw = MeasureText(ini, fs);
+        DrawText(ini, (int)(px - iw/2), (int)(py - fs/2), fs, (Color){10, 20, 50, 255});
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -133,31 +181,47 @@ void render_tabuleiro(const Tabuleiro *tab,
 {
     if (!tab || !tab->cabeca) return;
 
-    /* Área central */
-    DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){8, 18, 38, 255});
-    DrawText("REVITALIZA", BX+CS+10,  BY+CS+80,  28, (Color){255,140,30,50});
-    DrawText("RECIFE",     BX+CS+60,  BY+CS+115, 28, (Color){255,140,30,50});
+    if (textura_tabuleiro.id != 0) {
+        Rectangle src = {0, 0, (float)textura_tabuleiro.width, (float)textura_tabuleiro.height};
+        Rectangle dst = {IMG_X, IMG_Y, IMG_W, IMG_H};
+        DrawTexturePro(textura_tabuleiro, src, dst, (Vector2){0,0}, 0.0f, WHITE);
+        
+        /* Apenas desenha borda para propriedades compradas por cima da imagem */
+        Casa *c = tab->cabeca;
+        do {
+            if (c->proprietario >= 0 && c->proprietario < num_jogadores) {
+                Rectangle r = render_casa_rect(c->id);
+                /* Ajusta a borda para ficar ligeiramente interna e não sobrepor as linhas do desenho */
+                DrawRectangleLinesEx((Rectangle){r.x+2, r.y+2, r.width-4, r.height-4}, 4, COR_PINO[c->proprietario]);
+            }
+        } while ((c = c->next) != tab->cabeca);
+    } else {
+        /* Área central */
+        DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){8, 18, 38, 255});
+        DrawText("REVITALIZA", BX+CS+10,  BY+CS+80,  28, (Color){255,140,30,50});
+        DrawText("RECIFE",     BX+CS+60,  BY+CS+115, 28, (Color){255,140,30,50});
 
-    /* Casas */
-    Casa *c = tab->cabeca;
-    do {
-        Rectangle r   = render_casa_rect(c->id);
-        Color     cor = cor_da_casa(c);
+        /* Casas */
+        Casa *c = tab->cabeca;
+        do {
+            Rectangle r   = render_casa_rect(c->id);
+            Color     cor = cor_da_casa(c);
 
-        DrawRectangleRec(r, (Color){10, 25, 55, 255});
-        DrawRectangleRec(r, cor);
+            DrawRectangleRec(r, (Color){10, 25, 55, 255});
+            DrawRectangleRec(r, cor);
 
-        /* Borda colorida com a cor do dono (ou borda padrão) */
-        Color borda = (c->proprietario >= 0 && c->proprietario < num_jogadores)
-                      ? COR_PINO[c->proprietario] : COR_BORDA;
-        DrawRectangleLinesEx(r, 2, borda);
+            /* Borda colorida com a cor do dono (ou borda padrão) */
+            Color borda = (c->proprietario >= 0 && c->proprietario < num_jogadores)
+                          ? COR_PINO[c->proprietario] : COR_BORDA;
+            DrawRectangleLinesEx(r, 2, borda);
 
-        char id_str[4];
-        snprintf(id_str, sizeof(id_str), "%02d", c->id);
-        DrawText(id_str, (int)r.x + 4, (int)r.y + 4, 9, (Color){255,255,255,160});
+            char id_str[4];
+            snprintf(id_str, sizeof(id_str), "%02d", c->id);
+            DrawText(id_str, (int)r.x + 4, (int)r.y + 4, 9, (Color){255,255,255,160});
 
-        desenhar_nome(c->nome, r, 8);
-    } while ((c = c->next) != tab->cabeca);
+            desenhar_nome(c->nome, r, 8);
+        } while ((c = c->next) != tab->cabeca);
+    }
 
     /* --- Pinos de todos os jogadores --- */
 

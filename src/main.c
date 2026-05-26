@@ -11,7 +11,7 @@
 #define ALTURA         720
 #define NUM_JOGADORES    4
 
-typedef enum { TELA_MENU, TELA_SELECAO, TELA_JOGO, TELA_RESULTADO } TelaJogo;
+typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO } TelaJogo;
 
 #define COR_FUNDO      (Color){ 10,  20,  40, 255}
 #define COR_TITULO     (Color){255, 140,  30, 255}
@@ -78,6 +78,22 @@ int main(void)
     anim.face_atual       = 1;
     int ultimo_dado       = 0;
 
+    texturas_avatar[0] = LoadTexture("assets/Avatar_Frevo.png");
+    texturas_avatar[1] = LoadTexture("assets/Avatar_Manguebeat.png");
+    texturas_avatar[2] = LoadTexture("assets/Avatar_Monumento.png");
+    texturas_avatar[3] = LoadTexture("assets/Avatar_Tecnologia.png");
+    textura_tabuleiro  = LoadTexture("assets/Tabuleiro.png");
+
+    int num_humanos = 1;
+    int selecao_fase = 0; // 0: num_humanos, 1: escolhendo avatares
+    int humano_atual = 0;
+    int avatar_escolhido[NUM_JOGADORES] = {-1, -1, -1, -1};
+    int avatar_disponivel[4] = {1, 1, 1, 1};
+    
+    int ordem_rolagem_atual = 0;
+    float ordem_timer_dado = 0.0f;
+    int ordem_resultados[NUM_JOGADORES] = {0};
+
     /* Botões do menu principal */
 #define NUM_BOTOES_MENU 4
     struct { Rectangle rect; const char *texto; } botoes_menu[NUM_BOTOES_MENU] = {
@@ -121,53 +137,116 @@ int main(void)
 
         /* ---- SELECAO ---- */
         case TELA_SELECAO: {
-            int k_sel = 0;
-
-            /* Teclado */
-            for (int k = 1; k <= NUM_JOGADORES; k++) {
-                if (IsKeyPressed(KEY_ONE   + (k - 1)) ||
-                    IsKeyPressed(KEY_KP_1  + (k - 1)))
-                    k_sel = k;
-            }
-
-            /* Mouse */
-            for (int k = 1; k <= NUM_JOGADORES; k++) {
-                Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY, SEL_BW, SEL_BH };
-                if (CheckCollisionPointRec(mouse, br) &&
-                    IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-                    k_sel = k;
-            }
-
             if (IsKeyPressed(KEY_ESCAPE)) { estado = TELA_MENU; break; }
 
-            if (k_sel > 0) {
-                /* Reinicia o jogo */
-                if (tabuleiro) tabuleiro_destruir(tabuleiro);
-                if (cartas)    cartas_destruir(cartas);
-                tabuleiro = tabuleiro_criar();
-                cartas    = cartas_criar();
-
-                for (int i = 0; i < NUM_JOGADORES; i++) {
-                    char nome[MAX_NOME_JOGADOR];
-                    TipoJogador tipo;
-                    if (i < k_sel) {
-                        snprintf(nome, sizeof(nome), "Jogador %d", i + 1);
-                        tipo = TIPO_HUMANO;
-                    } else {
-                        snprintf(nome, sizeof(nome), "Bot %c", 'A' + (i - k_sel));
-                        tipo = TIPO_BOT;
-                    }
-                    jogadores[i] = jogador_criar(nome, tabuleiro->cabeca, tipo);
+            if (selecao_fase == 0) {
+                /* Escolha a quantidade de humanos */
+                int k_sel = 0;
+                for (int k = 1; k <= NUM_JOGADORES; k++) {
+                    if (IsKeyPressed(KEY_ONE + (k - 1)) || IsKeyPressed(KEY_KP_1 + (k - 1))) k_sel = k;
+                    Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY, SEL_BW, SEL_BH };
+                    if (CheckCollisionPointRec(mouse, br) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) k_sel = k;
                 }
 
-                jogador_atual   = 0;
-                bot_delay       = -1.0f;
-                turno_terminado = 0;
-                anim            = (AnimacaoTurno){0};
-                anim.estado     = TURNO_AGUARDANDO;
-                anim.face_atual = 1;
-                ultimo_dado     = 0;
-                estado          = TELA_JOGO;
+                if (k_sel > 0) {
+                    num_humanos = k_sel;
+                    selecao_fase = 1;
+                    humano_atual = 0;
+                    for(int i=0; i<4; i++) { avatar_escolhido[i] = -1; avatar_disponivel[i] = 1; }
+                }
+            } else if (selecao_fase == 1) {
+                /* Escolha do avatar para cada humano */
+                int av_sel = -1;
+                for (int k = 0; k < 4; k++) {
+                    if (!avatar_disponivel[k]) continue;
+                    if (IsKeyPressed(KEY_ONE + k) || IsKeyPressed(KEY_KP_1 + k)) av_sel = k;
+                    Rectangle br = { SEL_BX + k*(SEL_BW+SEL_GAP), SEL_BY + 100, SEL_BW, SEL_BH };
+                    if (CheckCollisionPointRec(mouse, br) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) av_sel = k;
+                }
+
+                if (av_sel != -1) {
+                    avatar_escolhido[humano_atual] = av_sel;
+                    avatar_disponivel[av_sel] = 0;
+                    humano_atual++;
+
+                    if (humano_atual >= num_humanos) {
+                        /* Preenche os bots com os avatares restantes */
+                        for (int i = num_humanos; i < NUM_JOGADORES; i++) {
+                            for(int a=0; a<4; a++) {
+                                if(avatar_disponivel[a]) {
+                                    avatar_escolhido[i] = a;
+                                    avatar_disponivel[a] = 0;
+                                    break;
+                                }
+                            }
+                        }
+
+                        /* Reinicia o jogo e cria jogadores */
+                        if (tabuleiro) tabuleiro_destruir(tabuleiro);
+                        if (cartas)    cartas_destruir(cartas);
+                        tabuleiro = tabuleiro_criar();
+                        cartas    = cartas_criar();
+
+                        for (int i = 0; i < NUM_JOGADORES; i++) {
+                            char nome[MAX_NOME_JOGADOR];
+                            TipoJogador tipo;
+                            if (i < num_humanos) {
+                                snprintf(nome, sizeof(nome), "Jogador %d", i + 1);
+                                tipo = TIPO_HUMANO;
+                            } else {
+                                snprintf(nome, sizeof(nome), "Bot %c", 'A' + (i - num_humanos));
+                                tipo = TIPO_BOT;
+                            }
+                            jogadores[i] = jogador_criar(nome, tabuleiro->cabeca, tipo, avatar_escolhido[i]);
+                        }
+
+                        ordem_rolagem_atual = 0;
+                        ordem_timer_dado = 0.0f;
+                        estado = TELA_ORDEM;
+                    }
+                }
+            }
+            break;
+        }
+
+        /* ---- ORDEM ---- */
+        case TELA_ORDEM: {
+            if (ordem_rolagem_atual < NUM_JOGADORES) {
+                ordem_timer_dado += dt;
+                anim.face_atual = rand() % 6 + 1;
+                
+                if (ordem_timer_dado > 1.2f) { // Após 1.2s rolando
+                    ordem_resultados[ordem_rolagem_atual] = rand() % 6 + 1;
+                    ordem_rolagem_atual++;
+                    ordem_timer_dado = 0.0f;
+                }
+            } else {
+                ordem_timer_dado += dt;
+                if (ordem_timer_dado > 3.0f || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { // Espera mostrar o resultado
+                    /* Ordena os jogadores baseado no dado rolado (Insertion Sort para O(N^2) mas como N=4 é constante) */
+                    for (int i = 1; i < NUM_JOGADORES; i++) {
+                        Jogador key_j = jogadores[i];
+                        int key_r = ordem_resultados[i];
+                        int j = i - 1;
+
+                        while (j >= 0 && ordem_resultados[j] < key_r) {
+                            jogadores[j + 1] = jogadores[j];
+                            ordem_resultados[j + 1] = ordem_resultados[j];
+                            j = j - 1;
+                        }
+                        jogadores[j + 1] = key_j;
+                        ordem_resultados[j + 1] = key_r;
+                    }
+
+                    jogador_atual   = 0;
+                    bot_delay       = -1.0f;
+                    turno_terminado = 0;
+                    anim            = (AnimacaoTurno){0};
+                    anim.estado     = TURNO_AGUARDANDO;
+                    anim.face_atual = 1;
+                    ultimo_dado     = 0;
+                    estado          = TELA_JOGO;
+                }
             }
             break;
         }
@@ -442,62 +521,138 @@ int main(void)
             int tw = MeasureText("REVITALIZA RECIFE", 46);
             DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 46, COR_TITULO);
 
-            const char *sub = "Quantos jogadores humanos?";
-            tw = MeasureText(sub, 22);
-            DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
+            if (selecao_fase == 0) {
+                const char *sub = "Quantos jogadores humanos?";
+                tw = MeasureText(sub, 22);
+                DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
 
-            DrawLineEx((Vector2){340,248}, (Vector2){940,248}, 1, COR_LINHA);
+                DrawLineEx((Vector2){340,248}, (Vector2){940,248}, 1, COR_LINHA);
 
-            /* Botões [1]–[4] */
-            for (int k = 1; k <= NUM_JOGADORES; k++) {
-                Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
-                                  SEL_BW, SEL_BH };
-                int hover = CheckCollisionPointRec(mouse, br);
-                Color cor_fundo = hover ? COR_BOTAO_HOV : COR_BOTAO;
+                /* Botões [1]–[4] */
+                for (int k = 1; k <= NUM_JOGADORES; k++) {
+                    Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
+                                      SEL_BW, SEL_BH };
+                    int hover = CheckCollisionPointRec(mouse, br);
+                    Color cor_fundo = hover ? COR_BOTAO_HOV : COR_BOTAO;
 
-                DrawRectangleRec(br, cor_fundo);
-                DrawRectangleLinesEx(br, 2, COR_PINO[k-1]);
+                    DrawRectangleRec(br, cor_fundo);
+                    DrawRectangleLinesEx(br, 2, COR_PINO[k-1]);
 
-                char txt[4];
-                snprintf(txt, sizeof(txt), "[%d]", k);
-                tw = MeasureText(txt, 26);
-                DrawText(txt,
-                         (int)(br.x + SEL_BW/2 - tw/2),
-                         (int)(br.y + SEL_BH/2 - 13),
-                         26, hover ? COR_FUNDO : COR_TEXTO_BTN);
-            }
-
-            /* Preview de jogadores por número selecionado via hover */
-            int hover_k = 0;
-            for (int k = 1; k <= NUM_JOGADORES; k++) {
-                Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
-                                  SEL_BW, SEL_BH };
-                if (CheckCollisionPointRec(mouse, br)) hover_k = k;
-            }
-            if (hover_k == 0) hover_k = 1; /* default preview */
-
-            int py = SEL_BY + SEL_BH + 30;
-            for (int i = 0; i < NUM_JOGADORES; i++) {
-                char preview[48];
-                Color cor_preview;
-                if (i < hover_k) {
-                    snprintf(preview, sizeof(preview), "Jogador %d  (Humano)", i + 1);
-                    cor_preview = COR_PINO[i];
-                } else {
-                    snprintf(preview, sizeof(preview), "Bot %c       (IA)",
-                             'A' + (i - hover_k));
-                    cor_preview = (Color){120, 130, 150, 200};
+                    char txt[4];
+                    snprintf(txt, sizeof(txt), "[%d]", k);
+                    tw = MeasureText(txt, 26);
+                    DrawText(txt,
+                             (int)(br.x + SEL_BW/2 - tw/2),
+                             (int)(br.y + SEL_BH/2 - 13),
+                             26, hover ? COR_FUNDO : COR_TEXTO_BTN);
                 }
-                DrawCircle(LARGURA/2 - 130, py + 8, 6, COR_PINO[i]);
-                tw = MeasureText(preview, 14);
-                DrawText(preview, LARGURA/2 - 120, py, 14, cor_preview);
-                py += 22;
+
+                /* Preview de jogadores por número selecionado via hover */
+                int hover_k = 0;
+                for (int k = 1; k <= NUM_JOGADORES; k++) {
+                    Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
+                                      SEL_BW, SEL_BH };
+                    if (CheckCollisionPointRec(mouse, br)) hover_k = k;
+                }
+                if (hover_k == 0) hover_k = 1; /* default preview */
+
+                int py = SEL_BY + SEL_BH + 30;
+                for (int i = 0; i < NUM_JOGADORES; i++) {
+                    char preview[48];
+                    Color cor_preview;
+                    if (i < hover_k) {
+                        snprintf(preview, sizeof(preview), "Jogador %d  (Humano)", i + 1);
+                        cor_preview = COR_PINO[i];
+                    } else {
+                        snprintf(preview, sizeof(preview), "Bot %c       (IA)",
+                                 'A' + (i - hover_k));
+                        cor_preview = (Color){120, 130, 150, 200};
+                    }
+                    DrawCircle(LARGURA/2 - 130, py + 8, 6, COR_PINO[i]);
+                    tw = MeasureText(preview, 14);
+                    DrawText(preview, LARGURA/2 - 120, py, 14, cor_preview);
+                    py += 22;
+                }
+            } else if (selecao_fase == 1) {
+                char sub[64];
+                snprintf(sub, sizeof(sub), "Jogador %d, escolha seu avatar:", humano_atual + 1);
+                tw = MeasureText(sub, 22);
+                DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
+
+                DrawLineEx((Vector2){340,248}, (Vector2){940,248}, 1, COR_LINHA);
+
+                const char* nomes_avatares[] = {"Frevo", "Manguebeat", "Monumento", "Tecnologia"};
+
+                for (int k = 0; k < 4; k++) {
+                    Rectangle br = { SEL_BX + k*(SEL_BW+SEL_GAP), SEL_BY + 100,
+                                      SEL_BW, SEL_BH };
+                    if (!avatar_disponivel[k]) {
+                        DrawRectangleRec(br, (Color){30, 30, 30, 200});
+                        continue;
+                    }
+
+                    int hover = CheckCollisionPointRec(mouse, br);
+                    Color cor_fundo = hover ? COR_BOTAO_HOV : COR_BOTAO;
+
+                    DrawRectangleRec(br, cor_fundo);
+                    DrawRectangleLinesEx(br, 2, COR_PINO[k]);
+
+                    if (texturas_avatar[k].id != 0) {
+                        Rectangle src = {0, 0, (float)texturas_avatar[k].width, (float)texturas_avatar[k].height};
+                        Rectangle dst = {br.x + br.width/2 - 25, br.y + 10, 50, 50};
+                        DrawTexturePro(texturas_avatar[k], src, dst, (Vector2){0,0}, 0.0f, WHITE);
+                    }
+
+                    tw = MeasureText(nomes_avatares[k], 14);
+                    DrawText(nomes_avatares[k],
+                             (int)(br.x + SEL_BW/2 - tw/2),
+                             (int)(br.y + SEL_BH - 18),
+                             14, hover ? COR_FUNDO : COR_TEXTO_BTN);
+                }
             }
 
             const char *hint = "[1]–[4] escolher   [ESC] Voltar";
             tw = MeasureText(hint, 14);
             DrawText(hint, LARGURA/2 - tw/2, 660, 14,
                      (Color){130, 150, 190, 200});
+            break;
+        }
+
+        /* ---- ORDEM ---- */
+        case TELA_ORDEM: {
+            DrawLineEx((Vector2){100,130}, (Vector2){100,580}, 2, COR_LINHA);
+            DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
+
+            int tw = MeasureText("REVITALIZA RECIFE", 46);
+            DrawText("REVITALIZA RECIFE", LARGURA/2 - tw/2, 130, 46, COR_TITULO);
+
+            const char *sub = "Decidindo a ordem de jogada...";
+            tw = MeasureText(sub, 22);
+            DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
+
+            int py = 300;
+            for (int i = 0; i < NUM_JOGADORES; i++) {
+                char texto[64];
+                if (i < ordem_rolagem_atual) {
+                    snprintf(texto, sizeof(texto), "%s: %d", jogadores[i].nome, ordem_resultados[i]);
+                } else if (i == ordem_rolagem_atual) {
+                    snprintf(texto, sizeof(texto), "%s: %d", jogadores[i].nome, anim.face_atual);
+                } else {
+                    snprintf(texto, sizeof(texto), "%s: -", jogadores[i].nome);
+                }
+                
+                Color cor = (i == ordem_rolagem_atual) ? COR_PINO[i] : WHITE;
+                tw = MeasureText(texto, 24);
+                DrawText(texto, LARGURA/2 - tw/2, py, 24, cor);
+
+                py += 40;
+            }
+
+            if (ordem_rolagem_atual >= NUM_JOGADORES) {
+                const char *hint = "Resultados ordenados! Pressione [ESPACO] para iniciar.";
+                tw = MeasureText(hint, 18);
+                DrawText(hint, LARGURA/2 - tw/2, py + 40, 18, COR_TITULO);
+            }
             break;
         }
 
@@ -585,6 +740,10 @@ int main(void)
     }
 
 sair:
+    for (int i = 0; i < 4; i++) {
+        if (texturas_avatar[i].id != 0) UnloadTexture(texturas_avatar[i]);
+    }
+    if (textura_tabuleiro.id != 0) UnloadTexture(textura_tabuleiro);
     if (tabuleiro) tabuleiro_destruir(tabuleiro);
     if (cartas)    cartas_destruir(cartas);
     CloseWindow();

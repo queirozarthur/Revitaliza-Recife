@@ -1,13 +1,14 @@
 #include "player.h"
 #include <string.h>
 
-Jogador jogador_criar(const char *nome, Casa *inicio, TipoJogador tipo)
+Jogador jogador_criar(const char *nome, Casa *inicio, TipoJogador tipo, int avatar_id)
 {
     Jogador j = {0};
     strncpy(j.nome, nome, MAX_NOME_JOGADOR - 1);
     j.moedas  = MOEDAS_INICIAIS;
     j.posicao = inicio;
     j.tipo    = tipo;
+    j.avatar_id = avatar_id;
     return j;
 }
 

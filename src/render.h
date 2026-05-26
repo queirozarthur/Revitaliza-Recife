@@ -48,6 +48,8 @@ typedef struct {
 /* Paleta dos pinos (indexada pelo número do jogador 0-3)              */
 /* ------------------------------------------------------------------ */
 extern const Color COR_PINO[4];
+extern Texture2D texturas_avatar[4];
+extern Texture2D textura_tabuleiro;
 
 /* ------------------------------------------------------------------ */
 /* API de renderização                                                  */
