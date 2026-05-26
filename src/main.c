@@ -154,9 +154,7 @@ int main(void)
                         anim.passos_restantes--;
 
                         if (anim.passos_restantes <= 0) {
-                            anim.estado = TURNO_AGUARDANDO;
-
-                            /* Aplica o efeito da casa onde o pino parou */
+                            /* Verifica se caiu em casa de carta */
                             const Carta *carta = NULL;
                             switch (jogador.posicao->tipo) {
                                 case CASA_SORTE:  carta = cartas_puxar_sorte(cartas);  break;
@@ -164,9 +162,14 @@ int main(void)
                                 case CASA_EVENTO: carta = cartas_puxar_evento(cartas); break;
                                 default: break;
                             }
-                            if (carta)
-                                carta_aplicar_efeito(carta, &jogador, 1, 0, tabuleiro);
 
+                            if (carta) {
+                                /* Mostra a carta antes de aplicar o efeito */
+                                anim.carta_ativa = carta;
+                                anim.estado      = TURNO_MOSTRANDO_CARTA;
+                            } else {
+                                anim.estado = TURNO_AGUARDANDO;
+                            }
                         } else {
                             setup_passo(&anim, &jogador);
                         }
@@ -176,6 +179,14 @@ int main(void)
             case TELA_RESULTADO:
                 if (IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
                 break;
+        }
+
+        /* Fecha a carta e aplica o efeito (fora do switch para qualquer tela) */
+        if (anim.estado == TURNO_MOSTRANDO_CARTA &&
+            (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER))) {
+            carta_aplicar_efeito(anim.carta_ativa, &jogador, 1, 0, tabuleiro);
+            anim.carta_ativa = NULL;
+            anim.estado      = TURNO_AGUARDANDO;
         }
 
         /* ---- DRAW ---- */
@@ -219,7 +230,8 @@ int main(void)
             case TELA_JOGO:
                 render_tabuleiro(tabuleiro, &jogador, &anim);
                 render_hud(&jogador, ultimo_dado);
-                render_dado(&anim);          /* por cima de tudo */
+                render_dado(&anim);
+                render_carta_overlay(&anim);  /* por cima de tudo */
                 break;
 
             case TELA_RESULTADO:

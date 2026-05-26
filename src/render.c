@@ -347,3 +347,174 @@ void render_dado(const AnimacaoTurno *anim)
         DrawText(txt, cx - tw/2, cy + RAIO + 10, 13, (Color){255,215,0,255});
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* render_carta_overlay                                                 */
+/* ------------------------------------------------------------------ */
+
+/* Quebra texto em linhas respeitando max_width */
+static int wrap_text(const char *text, int max_width, int font_size,
+                     char lines[][128], int max_lines)
+{
+    int n = 0;
+    const char *p = text;
+    char cur[128] = {0};
+
+    while (*p && n < max_lines) {
+        /* Acumula palavras até ultrapassar a largura */
+        const char *word = p;
+        while (*p && *p != ' ') p++;
+
+        char word_buf[64] = {0};
+        int  wlen = (int)(p - word);
+        if (wlen >= 63) wlen = 63;
+        strncpy(word_buf, word, (size_t)wlen);
+
+        char test[256];   /* amplo o suficiente para cur+space+word */
+        if (cur[0]) {
+            snprintf(test, sizeof(test), "%s %s", cur, word_buf);
+        } else {
+            snprintf(test, sizeof(test), "%s", word_buf);
+        }
+
+        if (MeasureText(test, font_size) > max_width && cur[0]) {
+            strncpy(lines[n++], cur, 127);
+            strncpy(cur, word_buf, 127);
+        } else {
+            strncpy(cur, test, 127);
+        }
+
+        if (*p == ' ') p++;
+    }
+    if (cur[0] && n < max_lines)
+        strncpy(lines[n++], cur, 127);
+
+    return n;
+}
+
+static void efeito_resumo(const Carta *c, char *buf, int len)
+{
+    static const char *snomes[] = {"", "TECNOLOGIA", "TURISMO", "COMERCIO"};
+    switch (c->efeito) {
+        case EFEITO_GANHAR_PONTOS:
+            snprintf(buf, len, "+%d pontos de %s", c->valor, snomes[c->setor]); break;
+        case EFEITO_PERDER_PONTOS:
+            snprintf(buf, len, "-%d pontos de %s", c->valor, snomes[c->setor]); break;
+        case EFEITO_GANHAR_MOEDAS:
+            snprintf(buf, len, "+%d moedas",  c->valor); break;
+        case EFEITO_PERDER_MOEDAS:
+            snprintf(buf, len, "-%d moedas",  c->valor); break;
+        case EFEITO_AVANCAR:
+            snprintf(buf, len, "Avance %d casa%s", c->valor, c->valor==1?"":"s"); break;
+        case EFEITO_VOLTAR_INICIO:
+            snprintf(buf, len, "Volte ao Marco Zero"); break;
+        case EFEITO_PERDER_TURNO:
+            snprintf(buf, len, "Perde %d turno%s", c->valor, c->valor==1?"":"s"); break;
+        case EFEITO_TODOS_GANHAM_PONTOS:
+            snprintf(buf, len, "Todos ganham +%d pt %s", c->valor, snomes[c->setor]); break;
+        case EFEITO_TODOS_PERDEM_MOEDAS:
+            snprintf(buf, len, "Todos pagam %d moedas", c->valor); break;
+        case EFEITO_PROPRIETARIOS_BONUS:
+            snprintf(buf, len, "Donos de %s ganham +%d pt", snomes[c->setor], c->valor); break;
+        default:
+            snprintf(buf, len, "Efeito desconhecido");
+    }
+}
+
+void render_carta_overlay(const AnimacaoTurno *anim)
+{
+    if (!anim || anim->estado != TURNO_MOSTRANDO_CARTA || !anim->carta_ativa)
+        return;
+
+    const Carta *c = anim->carta_ativa;
+
+    /* Cores por tipo */
+    Color cor_tipo, cor_borda;
+    const char *tipo_str;
+    switch (c->tipo) {
+        case CARTA_SORTE:
+            cor_tipo  = (Color){ 50, 200,  80, 255};
+            cor_borda = (Color){ 50, 200,  80, 255};
+            tipo_str  = "SORTE";
+            break;
+        case CARTA_AZAR:
+            cor_tipo  = (Color){220,  60,  60, 255};
+            cor_borda = (Color){220,  60,  60, 255};
+            tipo_str  = "AZAR";
+            break;
+        default: /* EVENTO */
+            cor_tipo  = (Color){160, 100, 220, 255};
+            cor_borda = (Color){160, 100, 220, 255};
+            tipo_str  = "EVENTO";
+            break;
+    }
+
+    /* Dimensões do painel */
+    const int PW = 500, PH = 380;
+    const int PX = (1280 - PW) / 2;
+    const int PY = (720  - PH) / 2;
+
+    /* Overlay escuro */
+    DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 170});
+
+    /* Sombra do painel */
+    DrawRectangleRounded(
+        (Rectangle){(float)(PX+6), (float)(PY+6), (float)PW, (float)PH},
+        0.06f, 8, (Color){0, 0, 0, 120});
+
+    /* Fundo do painel */
+    DrawRectangleRounded(
+        (Rectangle){(float)PX, (float)PY, (float)PW, (float)PH},
+        0.06f, 8, (Color){12, 22, 48, 255});
+
+    /* Borda colorida */
+    DrawRectangleRoundedLines(
+        (Rectangle){(float)PX, (float)PY, (float)PW, (float)PH},
+        0.06f, 8, cor_borda);
+
+    /* Cabeçalho colorido */
+    DrawRectangleRounded(
+        (Rectangle){(float)PX, (float)PY, (float)PW, 64.0f},
+        0.06f, 8, cor_tipo);
+    /* Cobre cantos inferiores do header para ficar reto embaixo */
+    DrawRectangle(PX, PY + 44, PW, 20, cor_tipo);
+
+    int tw = MeasureText(tipo_str, 26);
+    DrawText(tipo_str, PX + PW/2 - tw/2, PY + 18, 26, WHITE);
+
+    /* Título */
+    int ty = PY + 80;
+    tw = MeasureText(c->titulo, 22);
+    DrawText(c->titulo, PX + PW/2 - tw/2, ty, 22, WHITE);
+
+    /* Linha separadora */
+    ty += 36;
+    DrawLine(PX + 20, ty, PX + PW - 20, ty, (Color){60, 80, 120, 255});
+    ty += 14;
+
+    /* Descrição (com quebra de linha) */
+    char linhas[4][128] = {{0}};
+    int  n = wrap_text(c->descricao, PW - 60, 14, linhas, 4);
+    for (int i = 0; i < n; i++) {
+        tw = MeasureText(linhas[i], 14);
+        DrawText(linhas[i], PX + PW/2 - tw/2, ty, 14, (Color){180, 210, 255, 220});
+        ty += 20;
+    }
+
+    /* Linha separadora */
+    ty += 6;
+    DrawLine(PX + 20, ty, PX + PW - 20, ty, (Color){60, 80, 120, 255});
+    ty += 16;
+
+    /* Efeito */
+    char resumo[128];
+    efeito_resumo(c, resumo, sizeof(resumo));
+    tw = MeasureText(resumo, 18);
+    DrawText(resumo, PX + PW/2 - tw/2, ty, 18, cor_tipo);
+
+    /* Rodapé */
+    const char *hint = "[ESPACO] ou [ENTER]  Continuar";
+    tw = MeasureText(hint, 13);
+    DrawText(hint, PX + PW/2 - tw/2, PY + PH - 34, 13,
+             (Color){130, 150, 190, 200});
+}
