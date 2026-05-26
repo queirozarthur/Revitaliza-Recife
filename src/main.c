@@ -92,18 +92,32 @@ int main(void)
                         jogador.turnos_bloqueado--;
                         break;
                     }
-
                     int id_antes  = jogador.posicao->id;
                     ultimo_dado   = rand() % 6 + 1;
                     jogador.posicao = tabuleiro_mover(jogador.posicao, ultimo_dado);
                     int id_depois = jogador.posicao->id;
-
-                    /* Bônus ao passar/cair no Marco Zero */
                     if (passou_marco_zero(id_antes, id_depois))
                         jogador.moedas += BONUS_MARCO_ZERO;
+                    const Carta *carta = NULL;
+                    switch (jogador.posicao->tipo) {
+                        case CASA_SORTE:
+                            carta = cartas_puxar_sorte(cartas);
+                            break;
+                        case CASA_AZAR:
+                            carta = cartas_puxar_azar(cartas);
+                            break;
+                        case CASA_EVENTO:
+                            carta = cartas_puxar_evento(cartas);
+                            break;
+                        default:
+                            break;
+                    }
+                    if (carta)
+                        carta_aplicar_efeito(carta, &jogador, 1, 0, tabuleiro);
+                    if (jogador_venceu(&jogador))
+                        estado = TELA_RESULTADO;
                 }
                 break;
-
             case TELA_RESULTADO:
                 if (IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
                 break;

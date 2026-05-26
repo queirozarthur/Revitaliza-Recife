@@ -171,3 +171,79 @@ const Carta *cartas_buscar(const SistemaCartas *sc, int id)
     if (!sc) return NULL;
     return (const Carta *)ht_buscar(sc->tabela, id);
 }
+
+/* ------------------------------------------------------------------ */
+/* Aplicação de efeito                                                  */
+/* ------------------------------------------------------------------ */
+#include "player.h"
+
+Casa *carta_aplicar_efeito(const Carta *carta,
+                           Jogador *jogadores, int num_jogadores,
+                           int idx_atual,
+                           const Tabuleiro *tab)
+{
+    if (!carta || !jogadores) return NULL;
+
+    Jogador *j = &jogadores[idx_atual];
+
+    switch (carta->efeito) {
+
+        case EFEITO_GANHAR_PONTOS:
+            j->pontos[carta->setor] += carta->valor;
+            break;
+
+        case EFEITO_PERDER_PONTOS:
+            j->pontos[carta->setor] -= carta->valor;
+            if (j->pontos[carta->setor] < 0)
+                j->pontos[carta->setor] = 0;
+            break;
+
+        case EFEITO_GANHAR_MOEDAS:
+            j->moedas += carta->valor;
+            break;
+
+        case EFEITO_PERDER_MOEDAS:
+            j->moedas -= carta->valor;
+            if (j->moedas < 0) j->moedas = 0;
+            break;
+
+        case EFEITO_AVANCAR:
+            j->posicao = tabuleiro_mover(j->posicao, carta->valor);
+            return j->posicao;
+
+        case EFEITO_VOLTAR_INICIO:
+            j->posicao = tabuleiro_buscar_id(tab, 0);
+            return j->posicao;
+
+        case EFEITO_PERDER_TURNO:
+            j->turnos_bloqueado += carta->valor;
+            break;
+
+        case EFEITO_TODOS_GANHAM_PONTOS:
+            for (int i = 0; i < num_jogadores; i++)
+                jogadores[i].pontos[carta->setor] += carta->valor;
+            break;
+
+        case EFEITO_TODOS_PERDEM_MOEDAS:
+            for (int i = 0; i < num_jogadores; i++) {
+                jogadores[i].moedas -= carta->valor;
+                if (jogadores[i].moedas < 0) jogadores[i].moedas = 0;
+            }
+            break;
+
+        case EFEITO_PROPRIETARIOS_BONUS:
+            for (int i = 0; i < num_jogadores; i++) {
+                Casa *c = tab->cabeca;
+                do {
+                    if (c->setor == carta->setor && c->proprietario == i) {
+                        jogadores[i].pontos[carta->setor] += carta->valor;
+                        break;
+                    }
+                    c = c->next;
+                } while (c != tab->cabeca);
+            }
+            break;
+    }
+
+    return NULL;
+}
