@@ -1,32 +1,18 @@
 #include "render.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 /* ------------------------------------------------------------------ */
-/* Geometria do tabuleiro                                              */
-/*                                                                     */
-/*  Janela: 1280 x 720                                                 */
-/*  Tabuleiro: x=20..940, y=20..680   (920 x 660)                     */
-/*  HUD: x=960..1270                                                   */
-/*                                                                     */
-/*  Distribuição das 24 casas (sentido horário, partindo do BL):       */
-/*                                                                     */
-/*  [18][17][16][15][14][13][12]   <- topo   (D→E)                    */
-/*  [19]                    [11]                                       */
-/*  [20]       centro       [10]   <- lados                            */
-/*  [21]                    [ 9]                                       */
-/*  [22]                    [ 8]                                       */
-/*  [23]                    [ 7]                                       */
-/*  [ 0][ 1][ 2][ 3][ 4][ 5][ 6]  <- base   (E→D)                    */
+/* Geometria do tabuleiro (ver diagrama em render.h)                   */
 /* ------------------------------------------------------------------ */
+#define BX  20
+#define BY  20
+#define CS 110
+#define SW 140
+#define SH  88
 
-#define BX  20     /* board left x            */
-#define BY  20     /* board top  y            */
-#define CS  110    /* corner square size       */
-#define SW  140    /* horizontal square width  */
-#define SH  88     /* vertical   square height */
-
-/* Paleta de cores por setor/tipo */
+/* Paleta */
 #define COR_TEC   (Color){ 30, 144, 255, 220}
 #define COR_TUR   (Color){ 60, 179, 113, 220}
 #define COR_COM   (Color){255, 165,   0, 220}
@@ -38,38 +24,29 @@
 #define COR_PROP  (Color){ 30,  80, 130, 255}
 
 /* ------------------------------------------------------------------ */
-/* Posicionamento                                                       */
+/* Posicionamento das casas                                             */
 /* ------------------------------------------------------------------ */
-
 Rectangle render_casa_rect(int id)
 {
-    /* cantos */
     if (id ==  0) return (Rectangle){BX,           BY + CS + 5*SH, CS, CS};
     if (id ==  6) return (Rectangle){BX + CS+5*SW, BY + CS + 5*SH, CS, CS};
     if (id == 12) return (Rectangle){BX + CS+5*SW, BY,             CS, CS};
     if (id == 18) return (Rectangle){BX,           BY,             CS, CS};
 
-    /* base (E → D): IDs 1–5 */
-    if (id >= 1 && id <= 5)
-        return (Rectangle){BX + CS + (id-1)*SW, BY + CS + 5*SH, SW, CS};
-
-    /* direita (B → T): IDs 7–11 */
-    if (id >= 7 && id <= 11)
-        return (Rectangle){BX + CS + 5*SW, BY + CS + (11-id)*SH, CS, SH};
-
-    /* topo (D → E): IDs 13–17 */
+    if (id >= 1  && id <= 5)
+        return (Rectangle){BX + CS + (id-1)*SW,   BY + CS + 5*SH, SW, CS};
+    if (id >= 7  && id <= 11)
+        return (Rectangle){BX + CS + 5*SW, BY + CS + (11-id)*SH,  CS, SH};
     if (id >= 13 && id <= 17)
-        return (Rectangle){BX + CS + (17-id)*SW, BY, SW, CS};
-
-    /* esquerda (T → B): IDs 19–23 */
+        return (Rectangle){BX + CS + (17-id)*SW,  BY,             SW, CS};
     if (id >= 19 && id <= 23)
-        return (Rectangle){BX, BY + CS + (id-19)*SH, CS, SH};
+        return (Rectangle){BX, BY + CS + (id-19)*SH,              CS, SH};
 
     return (Rectangle){0, 0, 0, 0};
 }
 
 /* ------------------------------------------------------------------ */
-/* Helpers internos                                                     */
+/* Helpers internos — tabuleiro                                        */
 /* ------------------------------------------------------------------ */
 
 static Color cor_da_casa(const Casa *c)
@@ -78,7 +55,6 @@ static Color cor_da_casa(const Casa *c)
     if (c->tipo == CASA_SORTE)  return COR_SOR;
     if (c->tipo == CASA_AZAR)   return COR_AZA;
     if (c->tipo == CASA_EVENTO) return COR_EVT;
-
     switch (c->setor) {
         case SETOR_TECNOLOGIA: return COR_TEC;
         case SETOR_TURISMO:    return COR_TUR;
@@ -87,14 +63,12 @@ static Color cor_da_casa(const Casa *c)
     }
 }
 
-/* Desenha nome da casa em até duas linhas dentro do retângulo r */
 static void desenhar_nome(const char *nome, Rectangle r, int font)
 {
     int max_chars = (int)(r.width - 6) / (font * 6 / 10 + 1);
     if (max_chars < 1) max_chars = 1;
 
     int len = (int)strlen(nome);
-
     if (len <= max_chars) {
         int tw = MeasureText(nome, font);
         DrawText(nome,
@@ -104,36 +78,32 @@ static void desenhar_nome(const char *nome, Rectangle r, int font)
         return;
     }
 
-    /* Quebra na última palavra que cabe na primeira linha */
     int split = max_chars;
     while (split > 0 && nome[split] != ' ') split--;
     if (split == 0) split = max_chars;
 
     char linha1[MAX_NOME_CASA] = {0};
     strncpy(linha1, nome, (size_t)split);
-
-    int tw1 = MeasureText(linha1, font);
-    int tw2 = MeasureText(nome + split + 1, font);
+    int tw1 = MeasureText(linha1,        font);
+    int tw2 = MeasureText(nome+split+1,  font);
     int cy  = (int)(r.y + r.height/2) - font;
 
-    DrawText(linha1,
-             (int)(r.x + r.width/2 - tw1/2), cy, font, WHITE);
-    DrawText(nome + split + 1,
-             (int)(r.x + r.width/2 - tw2/2), cy + font + 2, font, WHITE);
+    DrawText(linha1,       (int)(r.x + r.width/2 - tw1/2), cy,          font, WHITE);
+    DrawText(nome+split+1, (int)(r.x + r.width/2 - tw2/2), cy + font+2, font, WHITE);
 }
 
 /* ------------------------------------------------------------------ */
-/* Render: tabuleiro                                                    */
+/* render_tabuleiro                                                     */
 /* ------------------------------------------------------------------ */
-
-void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador)
+void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador,
+                      const AnimacaoTurno *anim)
 {
     if (!tab || !tab->cabeca) return;
 
-    /* Fundo da área central */
-    DrawRectangle(BX + CS, BY + CS, 5*SW, 5*SH, (Color){8, 18, 38, 255});
-    DrawText("REVITALIZA", BX+CS+10,  BY+CS+80,  28, (Color){255,140,30,60});
-    DrawText("RECIFE",     BX+CS+60,  BY+CS+115, 28, (Color){255,140,30,60});
+    /* Área central */
+    DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){8, 18, 38, 255});
+    DrawText("REVITALIZA", BX+CS+10,  BY+CS+80,  28, (Color){255,140,30,50});
+    DrawText("RECIFE",     BX+CS+60,  BY+CS+115, 28, (Color){255,140,30,50});
 
     /* Casas */
     Casa *c = tab->cabeca;
@@ -141,47 +111,56 @@ void render_tabuleiro(const Tabuleiro *tab, const Jogador *jogador)
         Rectangle r   = render_casa_rect(c->id);
         Color     cor = cor_da_casa(c);
 
-        DrawRectangleRec(r, (Color){10, 25, 55, 255});     /* fundo escuro */
-        DrawRectangleRec(r, cor);                           /* camada de cor */
+        DrawRectangleRec(r, (Color){10, 25, 55, 255});
+        DrawRectangleRec(r, cor);
 
-        /* borda: branca se tem dono, cinza se livre */
-        Color borda = (c->proprietario >= 0)
-                      ? (Color){255, 255, 255, 255}
-                      : COR_BORDA;
+        Color borda = (c->proprietario >= 0) ? WHITE : COR_BORDA;
         DrawRectangleLinesEx(r, 2, borda);
 
-        /* ID no canto superior esquerdo */
         char id_str[4];
         snprintf(id_str, sizeof(id_str), "%02d", c->id);
         DrawText(id_str, (int)r.x + 4, (int)r.y + 4, 9, (Color){255,255,255,160});
 
-        /* Nome da casa */
         desenhar_nome(c->nome, r, 8);
-
     } while ((c = c->next) != tab->cabeca);
 
-    /* Peão do jogador */
-    if (jogador && jogador->posicao) {
-        Rectangle r  = render_casa_rect(jogador->posicao->id);
-        float     cx = r.x + r.width  / 2.0f;
-        float     cy = r.y + r.height / 2.0f - 8;
+    /* --- Pino com lerp suavizado --- */
+    if (!jogador || !jogador->posicao) return;
 
-        DrawCircle((int)cx + 2, (int)cy + 2, 14, (Color){0, 0, 0, 120}); /* sombra */
-        DrawCircle((int)cx,     (int)cy,     14, WHITE);
-        DrawCircleLines((int)cx, (int)cy,    14, (Color){30,30,60,255});
+    float px, py;
 
-        char ini[2] = { jogador->nome[0], '\0' };
-        int  iw     = MeasureText(ini, 14);
-        DrawText(ini, (int)(cx - iw/2), (int)(cy - 7), 14, (Color){10,20,50,255});
+    if (anim && anim->estado == TURNO_PINO_MOVENDO) {
+        /* Smoothstep: t³(6t²−15t+10)... usamos cúbica simples t²(3−2t) */
+        float t = anim->timer_passo / DURACAO_PASSO;
+        if (t > 1.0f) t = 1.0f;
+        t = t * t * (3.0f - 2.0f * t);
+
+        px = anim->pos_inicio.x + (anim->pos_fim.x - anim->pos_inicio.x) * t;
+        py = anim->pos_inicio.y + (anim->pos_fim.y - anim->pos_inicio.y) * t;
+
+        /* Arco leve: sobe no meio do passo */
+        py -= 14.0f * sinf(t * 3.14159f);
+    } else {
+        Rectangle r = render_casa_rect(jogador->posicao->id);
+        px = r.x + r.width  / 2.0f;
+        py = r.y + r.height / 2.0f;
     }
+
+    /* Sombra */
+    DrawCircle((int)px + 2, (int)py + 2, 14, (Color){0, 0, 0, 120});
+    /* Corpo */
+    DrawCircle((int)px,     (int)py,     14, WHITE);
+    DrawCircleLines((int)px, (int)py,    14, (Color){30, 30, 60, 255});
+    /* Inicial */
+    char ini[2] = { jogador->nome[0], '\0' };
+    int  iw = MeasureText(ini, 14);
+    DrawText(ini, (int)(px - iw/2), (int)(py - 7), 14, (Color){10, 20, 50, 255});
 }
 
 /* ------------------------------------------------------------------ */
-/* Render: HUD lateral                                                  */
+/* render_hud                                                           */
 /* ------------------------------------------------------------------ */
-
-static void barra_progresso(int x, int y, int w, int h,
-                             float ratio, Color cor)
+static void barra_progresso(int x, int y, int w, int h, float ratio, Color cor)
 {
     if (ratio > 1.0f) ratio = 1.0f;
     DrawRectangle(x, y, w, h, (Color){20, 30, 55, 255});
@@ -191,81 +170,69 @@ static void barra_progresso(int x, int y, int w, int h,
 
 void render_hud(const Jogador *jogador, int ultimo_dado)
 {
-    const int HX  = 962;
-    const int HW  = 308;
+    const int HX = 962, HW = 308;
 
-    /* fundo */
     DrawRectangle(960, 0, 320, 720, (Color){8, 18, 38, 255});
-    DrawLineEx((Vector2){960, 0}, (Vector2){960, 720}, 2,
-               (Color){255, 140, 30, 200});
+    DrawLineEx((Vector2){960, 0}, (Vector2){960, 720}, 2, (Color){255,140,30,200});
 
     if (!jogador) return;
 
     int x = HX, y = 20;
     char buf[64];
 
-    /* --- Título --- */
-    DrawText("STATUS", x, y, 20, (Color){255, 140, 30, 255});
+    DrawText("STATUS", x, y, 20, (Color){255,140,30,255});
     y += 28;
-    DrawLine(x, y, x + HW, y, (Color){255, 140, 30, 80});
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,80});
     y += 14;
 
-    /* --- Nome --- */
-    DrawText(jogador->nome, x, y, 18, (Color){220, 235, 255, 255});
+    DrawText(jogador->nome, x, y, 18, (Color){220,235,255,255});
     y += 36;
 
-    /* --- Moedas --- */
-    DrawText("MOEDAS", x, y, 11, (Color){160, 160, 160, 255});
+    DrawText("MOEDAS", x, y, 11, (Color){160,160,160,255});
     y += 16;
     snprintf(buf, sizeof(buf), "$ %d", jogador->moedas);
-    DrawText(buf, x, y, 24, (Color){255, 215, 0, 255});
+    DrawText(buf, x, y, 24, (Color){255,215,0,255});
     y += 42;
 
-    DrawLine(x, y, x + HW, y, (Color){255, 140, 30, 50});
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
     y += 14;
 
-    /* --- Pontos de impacto --- */
-    DrawText("PONTOS DE IMPACTO", x, y, 11, (Color){160, 160, 160, 255});
+    DrawText("PONTOS DE IMPACTO", x, y, 11, (Color){160,160,160,255});
     y += 20;
 
-    /* Tecnologia */
     DrawText("TECNOLOGIA", x, y, 13, COR_TEC);
     snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_TECNOLOGIA], META_PONTOS);
-    DrawText(buf, x + HW - MeasureText(buf, 13), y, 13, WHITE);
+    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
     y += 18;
     barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_TECNOLOGIA] / META_PONTOS, COR_TEC);
+                    (float)jogador->pontos[SETOR_TECNOLOGIA]/META_PONTOS, COR_TEC);
     y += 22;
 
-    /* Turismo */
     DrawText("TURISMO", x, y, 13, COR_TUR);
     snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_TURISMO], META_PONTOS);
-    DrawText(buf, x + HW - MeasureText(buf, 13), y, 13, WHITE);
+    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
     y += 18;
     barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_TURISMO] / META_PONTOS, COR_TUR);
+                    (float)jogador->pontos[SETOR_TURISMO]/META_PONTOS, COR_TUR);
     y += 22;
 
-    /* Comércio */
     DrawText("COMERCIO", x, y, 13, COR_COM);
     snprintf(buf, sizeof(buf), "%d/%d", jogador->pontos[SETOR_COMERCIO], META_PONTOS);
-    DrawText(buf, x + HW - MeasureText(buf, 13), y, 13, WHITE);
+    DrawText(buf, x+HW-MeasureText(buf,13), y, 13, WHITE);
     y += 18;
     barra_progresso(x, y, HW, 10,
-                    (float)jogador->pontos[SETOR_COMERCIO] / META_PONTOS, COR_COM);
+                    (float)jogador->pontos[SETOR_COMERCIO]/META_PONTOS, COR_COM);
     y += 32;
 
-    DrawLine(x, y, x + HW, y, (Color){255, 140, 30, 50});
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
     y += 14;
 
-    /* --- Posição atual --- */
-    DrawText("POSICAO ATUAL", x, y, 11, (Color){160, 160, 160, 255});
+    DrawText("POSICAO ATUAL", x, y, 11, (Color){160,160,160,255});
     y += 18;
     if (jogador->posicao) {
-        DrawText(jogador->posicao->nome, x, y, 13, (Color){220, 235, 255, 255});
+        DrawText(jogador->posicao->nome, x, y, 13, (Color){220,235,255,255});
         y += 20;
-
-        Color sc = (Color){160, 160, 160, 255};
+        Color sc = (Color){160,160,160,255};
         const char *ss = "NEUTRO";
         switch (jogador->posicao->setor) {
             case SETOR_TECNOLOGIA: sc = COR_TEC; ss = "TECNOLOGIA"; break;
@@ -277,25 +244,106 @@ void render_hud(const Jogador *jogador, int ultimo_dado)
     }
     y += 36;
 
-    DrawLine(x, y, x + HW, y, (Color){255, 140, 30, 50});
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
     y += 14;
 
-    /* --- Último dado --- */
-    DrawText("ULTIMO DADO", x, y, 11, (Color){160, 160, 160, 255});
+    DrawText("ULTIMO DADO", x, y, 11, (Color){160,160,160,255});
     y += 18;
     if (ultimo_dado > 0) {
         snprintf(buf, sizeof(buf), "%d", ultimo_dado);
-        DrawText(buf, x, y, 32, (Color){255, 140, 30, 255});
+        DrawText(buf, x, y, 32, (Color){255,140,30,255});
     } else {
-        DrawText("-", x, y, 32, (Color){100, 100, 100, 255});
+        DrawText("-", x, y, 32, (Color){100,100,100,255});
     }
     y += 56;
 
-    DrawLine(x, y, x + HW, y, (Color){255, 140, 30, 50});
+    DrawLine(x, y, x+HW, y, (Color){255,140,30,50});
     y += 14;
 
-    /* --- Controles --- */
-    DrawText("CONTROLES", x, y, 11, (Color){160, 160, 160, 255});
+    DrawText("CONTROLES", x, y, 11, (Color){160,160,160,255});
     y += 18;
-    DrawText("[ESPACO]  Rolar dado", x, y, 12, (Color){200, 220, 255, 180});
+    DrawText("[ESPACO]  Rolar dado", x, y, 12, (Color){200,220,255,180});
+}
+
+/* ------------------------------------------------------------------ */
+/* render_dado                                                          */
+/* ------------------------------------------------------------------ */
+
+/* Posições dos pontos em frações do raio do dado, por face */
+static const struct { int n; float x[6]; float y[6]; } FACES[7] = {
+    {0},
+    {1, {0.00f},                                      {0.00f}                                     },
+    {2, { 0.32f, -0.32f},                             {-0.32f,  0.32f}                            },
+    {3, { 0.32f,  0.00f, -0.32f},                     {-0.32f,  0.00f,  0.32f}                   },
+    {4, {-0.32f,  0.32f, -0.32f,  0.32f},             {-0.32f, -0.32f,  0.32f,  0.32f}           },
+    {5, {-0.32f,  0.32f,  0.00f, -0.32f,  0.32f},     {-0.32f, -0.32f,  0.00f,  0.32f,  0.32f}  },
+    {6, {-0.32f,  0.32f, -0.32f,  0.32f, -0.32f,  0.32f},
+        {-0.34f, -0.34f,  0.00f,  0.00f,  0.34f,  0.34f}                                         },
+};
+
+static void desenhar_pontos_dado(int face, float cx, float cy, float raio)
+{
+    if (face < 1 || face > 6) return;
+    float dr = raio * 0.14f;
+    for (int i = 0; i < FACES[face].n; i++) {
+        DrawCircle(
+            (int)(cx + FACES[face].x[i] * raio),
+            (int)(cy + FACES[face].y[i] * raio),
+            (int)dr,
+            (Color){20, 30, 70, 255}
+        );
+    }
+}
+
+void render_dado(const AnimacaoTurno *anim)
+{
+    if (!anim || anim->estado == TURNO_AGUARDANDO) return;
+
+    /* Centro da área interna do tabuleiro */
+    const int CX   = BX + CS + (5*SW) / 2;   /* 480 */
+    const int CY   = BY + CS + (5*SH) / 2;   /* 350 */
+    const int RAIO = 52;
+
+    int cx = CX + anim->jitter_x;
+    int cy = CY + anim->jitter_y;
+
+    /* Overlay escuro atrás do dado */
+    DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){0, 0, 0, 150});
+
+    /* Sombra */
+    DrawRectangleRounded(
+        (Rectangle){(float)(cx - RAIO + 5), (float)(cy - RAIO + 5),
+                    (float)(2*RAIO),         (float)(2*RAIO)},
+        0.18f, 6, (Color){0, 0, 0, 100}
+    );
+
+    /* Corpo do dado */
+    DrawRectangleRounded(
+        (Rectangle){(float)(cx - RAIO), (float)(cy - RAIO),
+                    (float)(2*RAIO),    (float)(2*RAIO)},
+        0.18f, 6, (Color){240, 240, 250, 255}
+    );
+
+    /* Borda laranja quando parado (resultado fixo) */
+    Color borda = (anim->estado == TURNO_PINO_MOVENDO)
+                  ? (Color){255, 140, 30, 255}
+                  : (Color){180, 180, 200, 255};
+    DrawRectangleRoundedLines(
+        (Rectangle){(float)(cx - RAIO), (float)(cy - RAIO),
+                    (float)(2*RAIO),    (float)(2*RAIO)},
+        0.18f, 6, borda
+    );
+
+    /* Pontos da face */
+    desenhar_pontos_dado(anim->face_atual, (float)cx, (float)cy, (float)RAIO);
+
+    /* Quando o pino está movendo: mostra resultado + passos restantes */
+    if (anim->estado == TURNO_PINO_MOVENDO) {
+        char txt[24];
+        snprintf(txt, sizeof(txt), "%d passo%s",
+                 anim->passos_restantes,
+                 anim->passos_restantes == 1 ? "" : "s");
+        int tw = MeasureText(txt, 13);
+        DrawText(txt, cx - tw/2, cy + RAIO + 10, 13, (Color){255,215,0,255});
+    }
 }
