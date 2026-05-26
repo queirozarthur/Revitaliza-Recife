@@ -33,6 +33,7 @@ const Color COR_PINO[4] = {
 
 Texture2D texturas_avatar[4] = {0};
 Texture2D textura_tabuleiro = {0};
+Texture2D textura_costas_cartas[3] = {0};
 
 /* Offsets por jogador para evitar sobreposição na mesma casa */
 static const float PINO_OX[4] = {-7.0f,  7.0f, -7.0f,  7.0f};
@@ -175,6 +176,18 @@ static void desenhar_pino(float px, float py, int idx_jogador,
 /* ------------------------------------------------------------------ */
 /* render_tabuleiro                                                     */
 /* ------------------------------------------------------------------ */
+Rectangle obter_rect_deck(int tipo_deck)
+{
+    float deck_w = 120;
+    float deck_h = 80;
+    float gap = 30;
+    float total_w = 3 * deck_w + 2 * gap;
+    float start_x = IMG_X + IMG_W / 2.0f - total_w / 2.0f;
+    float start_y = IMG_Y + IMG_H / 2.0f - deck_h / 2.0f;
+    
+    return (Rectangle){start_x + tipo_deck * (deck_w + gap), start_y, deck_w, deck_h};
+}
+
 void render_tabuleiro(const Tabuleiro *tab,
                       const Jogador *jogadores, int num_jogadores, int jogador_atual,
                       const AnimacaoTurno *anim)
@@ -195,6 +208,38 @@ void render_tabuleiro(const Tabuleiro *tab,
                 DrawRectangleLinesEx((Rectangle){r.x+2, r.y+2, r.width-4, r.height-4}, 4, COR_PINO[c->proprietario]);
             }
         } while ((c = c->next) != tab->cabeca);
+        
+        /* Desenha os 3 decks de cartas no centro */
+        for (int i = 0; i < 3; i++) {
+            Rectangle rect = obter_rect_deck(i);
+            if (textura_costas_cartas[i].id != 0) {
+                /* As imagens são 16:9 (2752x1536), mas o deck é 3:2 (120x80) horizontal. 
+                 * Para não achatar, pegamos um crop de 2304x1536 no centro. */
+                float tw = textura_costas_cartas[i].width;
+                float th = textura_costas_cartas[i].height;
+                float crop_w = th * (3.0f / 2.0f); /* Ex: 1536 * 1.5 = 2304 */
+                float crop_x = (tw - crop_w) / 2.0f;
+                Rectangle src = {crop_x, 0, crop_w, th};
+                DrawTexturePro(textura_costas_cartas[i], src, rect, (Vector2){0,0}, 0.0f, WHITE);
+                
+                /* Destaque branco se passar o mouse por cima E for a vez de comprar dessa pilha */
+                if (anim && anim->estado == TURNO_ESPERANDO_COMPRA_CARTA && jogadores && jogadores[jogador_atual].tipo == TIPO_HUMANO) {
+                    int deck_ativo = -1;
+                    if (jogadores[jogador_atual].posicao->tipo == CASA_SORTE) deck_ativo = 0;
+                    if (jogadores[jogador_atual].posicao->tipo == CASA_AZAR)  deck_ativo = 1;
+                    if (jogadores[jogador_atual].posicao->tipo == CASA_EVENTO) deck_ativo = 2;
+                    
+                    if (i == deck_ativo) {
+                        Vector2 mouse = GetMousePosition();
+                        if (CheckCollisionPointRec(mouse, rect)) {
+                            DrawRectangleLinesEx((Rectangle){rect.x-4, rect.y-4, rect.width+8, rect.height+8}, 4, WHITE);
+                        } else {
+                            DrawRectangleLinesEx((Rectangle){rect.x-2, rect.y-2, rect.width+4, rect.height+4}, 2, (Color){255,255,255,100});
+                        }
+                    }
+                }
+            }
+        }
     } else {
         /* Área central */
         DrawRectangle(BX+CS, BY+CS, 5*SW, 5*SH, (Color){8, 18, 38, 255});
@@ -397,7 +442,10 @@ void render_hud(const Jogador *jogadores, int num_jogadores, int jogador_atual, 
             snprintf(buf, sizeof(buf), "[ESPACO]  Pular turno (%d)", j->turnos_bloqueado);
             DrawText(buf, x, y, 11, (Color){220,80,80,180});
         } else {
-            DrawText("[ESPACO]  Rolar dado", x, y, 11, (Color){200,220,255,180});
+            // Hack para descobrir se estamos esperando carta (só para UI visual do jogador atual)
+            // Como render_hud não recebe anim, não temos como checar direto de forma limpa.
+            // Vou manter genérico.
+            DrawText("[ESPACO]  Rolar/Puxar/Avançar", x, y, 11, (Color){200,220,255,180});
         }
     } else {
         DrawText("Bot pensando...", x, y, 11, (Color){160,200,160,180});
@@ -555,7 +603,48 @@ static void efeito_resumo(const Carta *c, char *buf, int len)
 
 void render_carta_overlay(const AnimacaoTurno *anim)
 {
-    if (!anim || anim->estado != TURNO_MOSTRANDO_CARTA || !anim->carta_ativa)
+    if (!anim) return;
+
+    if (anim->estado == TURNO_ANIMANDO_COMPRA_CARTA && anim->carta_ativa) {
+        /* Animação da carta voando do deck para o centro da tela */
+        int deck_idx = -1;
+        if (anim->carta_ativa->tipo == CARTA_SORTE) deck_idx = 0;
+        if (anim->carta_ativa->tipo == CARTA_AZAR)  deck_idx = 1;
+        if (anim->carta_ativa->tipo == CARTA_EVENTO) deck_idx = 2;
+
+        if (deck_idx != -1 && textura_costas_cartas[deck_idx].id != 0) {
+            Rectangle deck_rect = obter_rect_deck(deck_idx);
+            /* Carta voando ganha escala mas preserva o ratio 3:2 horizontal */
+            const int PW_CARD = 375, PH_CARD = 250;
+            /* Centro do tabuleiro: X = 10 + 938/2 = 479, Y = 104 + 511/2 = 360 */
+            const int PX = 479 - PW_CARD / 2;
+            const int PY = 360 - PH_CARD / 2;
+            
+            float t = anim->timer_carta; /* de 0.0 a 1.0 */
+            /* Easing out simples (desacelera no final) */
+            float ease_t = 1.0f - (1.0f - t) * (1.0f - t);
+            
+            float curr_x = deck_rect.x + (PX - deck_rect.x) * ease_t;
+            float curr_y = deck_rect.y + (PY - deck_rect.y) * ease_t;
+            float curr_w = deck_rect.width + (PW_CARD - deck_rect.width) * ease_t;
+            float curr_h = deck_rect.height + (PH_CARD - deck_rect.height) * ease_t;
+            
+            /* Escurecer fundo proporcionalmente ao tempo */
+            DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, (unsigned char)(170 * ease_t)});
+            
+            float tw = textura_costas_cartas[deck_idx].width;
+            float th = textura_costas_cartas[deck_idx].height;
+            float crop_w = th * (3.0f / 2.0f);
+            float crop_x = (tw - crop_w) / 2.0f;
+            Rectangle src = {crop_x, 0, crop_w, th};
+            
+            Rectangle dst = {curr_x, curr_y, curr_w, curr_h};
+            DrawTexturePro(textura_costas_cartas[deck_idx], src, dst, (Vector2){0,0}, 0.0f, WHITE);
+        }
+        return;
+    }
+
+    if (anim->estado != TURNO_MOSTRANDO_CARTA || !anim->carta_ativa)
         return;
 
     const Carta *c = anim->carta_ativa;
@@ -581,9 +670,11 @@ void render_carta_overlay(const AnimacaoTurno *anim)
     }
 
     const int PW = 500, PH = 380;
-    const int PX = (1280 - PW) / 2;
-    const int PY = (720  - PH) / 2;
+    /* Centro do tabuleiro é 479, 360 */
+    const int PX = 479 - PW / 2;
+    const int PY = 360 - PH / 2;
 
+    /* Escurece a tela toda para focar na janela do evento */
     DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 170});
 
     DrawRectangleRounded(

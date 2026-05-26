@@ -86,6 +86,9 @@ int main(void)
     texturas_avatar[2] = LoadTexture("assets/Avatar_Monumento.png");
     texturas_avatar[3] = LoadTexture("assets/Avatar_Tecnologia.png");
     textura_tabuleiro  = LoadTexture("assets/Tabuleiro.png");
+    textura_costas_cartas[0] = LoadTexture("assets/Carta_Sorte_Verso.png");
+    textura_costas_cartas[1] = LoadTexture("assets/Carta_Azar_Verso.png");
+    textura_costas_cartas[2] = LoadTexture("assets/Carta_Verso_Evento.png");
 
     int num_humanos = 1;
     int selecao_fase = 0; // 0: num_humanos, 1: escolhendo avatares
@@ -391,7 +394,8 @@ int main(void)
 
                         if (carta) {
                             anim.carta_ativa = carta;
-                            anim.estado      = TURNO_MOSTRANDO_CARTA;
+                            anim.estado      = TURNO_ESPERANDO_COMPRA_CARTA;
+                            anim.timer_carta = 0.0f;
                         } else if (J_ATUAL->posicao->tipo == CASA_PROPRIEDADE) {
                             anim.casa_ativa = J_ATUAL->posicao;
                             if (J_ATUAL->posicao->proprietario < 0) {
@@ -429,8 +433,52 @@ int main(void)
         /* ==================================================================
          * OVERLAYS — tratados fora do switch principal
          * ================================================================== */
+         
+        /* Esperando jogador puxar a carta (clicando no deck ou apertando botão) */
+        if (anim.estado == TURNO_ESPERANDO_COMPRA_CARTA && anim.carta_ativa) {
+            int clicou = 0;
+            if (!IS_BOT) {
+                if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
+                    clicou = 1;
+                } else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    int deck_ativo = -1;
+                    if (anim.carta_ativa->tipo == CARTA_SORTE) deck_ativo = 0;
+                    if (anim.carta_ativa->tipo == CARTA_AZAR)  deck_ativo = 1;
+                    if (anim.carta_ativa->tipo == CARTA_EVENTO) deck_ativo = 2;
+                    
+                    if (deck_ativo != -1) {
+                        Rectangle rect = obter_rect_deck(deck_ativo);
+                        if (CheckCollisionPointRec(mouse, rect)) {
+                            clicou = 1;
+                        }
+                    }
+                }
+            } else {
+                /* Bot puxa a carta sozinho após um tempo */
+                if (bot_delay < 0.0f) bot_delay = 0.5f;
+                bot_delay -= dt;
+                if (bot_delay <= 0.0f) {
+                    bot_delay = -1.0f;
+                    clicou = 1;
+                }
+            }
 
-        /* Carta puxada */
+            if (clicou) {
+                anim.estado = TURNO_ANIMANDO_COMPRA_CARTA;
+                anim.timer_carta = 0.0f;
+            }
+        }
+        
+        /* Animação da carta subindo do deck */
+        if (anim.estado == TURNO_ANIMANDO_COMPRA_CARTA) {
+            anim.timer_carta += dt / 0.5f; /* 0.5 segundos de animação */
+            if (anim.timer_carta >= 1.0f) {
+                anim.timer_carta = 1.0f;
+                anim.estado = TURNO_MOSTRANDO_CARTA;
+            }
+        }
+
+        /* Mostrando a carta já puxada */
         if (anim.estado == TURNO_MOSTRANDO_CARTA && anim.carta_ativa) {
             if (!IS_BOT) {
                 if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
