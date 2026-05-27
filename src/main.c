@@ -12,7 +12,7 @@
 #define ALTURA         720
 #define NUM_JOGADORES    4
 
-typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO } TelaJogo;
+typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO, TELA_INSTRUCOES } TelaJogo;
 
 #define COR_FUNDO      (Color){ 10,  20,  40, 255}
 #define COR_TITULO     (Color){255, 140,  30, 255}
@@ -136,15 +136,21 @@ int main(void)
 
         /* ---- MENU ---- */
         case TELA_MENU:
-            if (IsKeyPressed(KEY_ONE)  || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
-            if (IsKeyPressed(KEY_ZERO) || IsKeyPressed(KEY_KP_0)) goto sair;
+            if (IsKeyPressed(KEY_ONE)   || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
+            if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) estado = TELA_INSTRUCOES;
+            if (IsKeyPressed(KEY_ZERO)  || IsKeyPressed(KEY_KP_0)) goto sair;
             for (int i = 0; i < NUM_BOTOES_MENU; i++) {
                 if (CheckCollisionPointRec(mouse, botoes_menu[i].rect) &&
                     IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (i == 0) estado = TELA_SELECAO;
+                    if (i == 2) estado = TELA_INSTRUCOES;
                     if (i == NUM_BOTOES_MENU - 1) goto sair;
                 }
             }
+            break;
+
+        case TELA_INSTRUCOES:
+            if (IsKeyPressed(KEY_ESCAPE)) estado = TELA_MENU;
             break;
 
         /* ---- SELECAO ---- */
@@ -853,6 +859,117 @@ int main(void)
             render_propriedade_overlay(&anim, J_ATUAL);
             render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
             render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
+            break;
+        }
+
+        /* ---- INSTRUCOES ---- */
+        case TELA_INSTRUCOES: {
+            DrawLineEx((Vector2){100, 80},  (Vector2){100, 650}, 2, COR_LINHA);
+            DrawLineEx((Vector2){1180, 80}, (Vector2){1180, 650}, 2, COR_LINHA);
+
+            int tw = MeasureText("INSTRUCOES", 44);
+            DrawText("INSTRUCOES", LARGURA/2 - tw/2, 30, 44, COR_TITULO);
+            DrawLineEx((Vector2){300, 88}, (Vector2){980, 88}, 1, COR_LINHA);
+
+            /* --- Coluna esquerda --- */
+            int lx = 130, rx = 680;
+            int y = 108;
+
+            /* OBJETIVO */
+            DrawText("OBJETIVO", lx, y, 16, COR_TITULO);
+            y += 24;
+            DrawLine(lx, y, lx + 490, y, (Color){255,140,30,60});
+            y += 10;
+            DrawText("Acumule 20 pontos em cada setor para vencer:", lx, y, 14, COR_SUBTITULO);
+            y += 22;
+
+            DrawCircle(lx + 8,  y + 7, 6, (Color){30,144,255,220});
+            DrawText("Tecnologia", lx + 20, y, 14, (Color){30,144,255,255});
+            DrawCircle(lx + 138, y + 7, 6, (Color){60,179,113,220});
+            DrawText("Turismo",    lx + 150, y, 14, (Color){60,179,113,255});
+            DrawCircle(lx + 248, y + 7, 6, (Color){255,165,0,220});
+            DrawText("Comercio",   lx + 260, y, 14, (Color){255,165,0,255});
+            y += 30;
+
+            DrawText("Passe pelo Marco Zero para ganhar +100 moedas.", lx, y, 13, (Color){180,210,255,180});
+            y += 36;
+
+            /* CONTROLES */
+            DrawText("CONTROLES", lx, y, 16, COR_TITULO);
+            y += 24;
+            DrawLine(lx, y, lx + 490, y, (Color){255,140,30,60});
+            y += 10;
+
+            struct { const char *tecla; const char *desc; } controles[] = {
+                { "[ESPACO]",   "Rolar o dado / confirmar acao"    },
+                { "[C]",        "Comprar propriedade"              },
+                { "[X]",        "Passar sem comprar"               },
+                { "[ENTER]",    "Confirmar / fechar carta"         },
+                { "[1]–[4]",    "Ver status de cada jogador no HUD"},
+                { "[ESC]",      "Cancelar / desfazer selecao"      },
+            };
+            for (int i = 0; i < 6; i++) {
+                int kw = MeasureText(controles[i].tecla, 14);
+                DrawRectangle(lx, y, kw + 10, 20, (Color){20,50,90,255});
+                DrawText(controles[i].tecla, lx + 5, y + 3, 14, (Color){255,215,0,255});
+                DrawText(controles[i].desc,  lx + kw + 18, y + 3, 13, COR_SUBTITULO);
+                y += 26;
+            }
+
+            /* --- Coluna direita --- */
+            y = 108;
+
+            DrawText("TIPOS DE CASA", rx, y, 16, COR_TITULO);
+            y += 24;
+            DrawLine(rx, y, rx + 470, y, (Color){255,140,30,60});
+            y += 10;
+
+            struct { Color cor; const char *nome; const char *desc; } casas[] = {
+                { (Color){255,215,0,220},   "Marco Zero",  "Ponto de partida. +100 moedas ao passar." },
+                { (Color){30,144,255,220},  "Tecnologia",  "Compre e gere pontos de tecnologia."      },
+                { (Color){60,179,113,220},  "Turismo",     "Compre e gere pontos de turismo."         },
+                { (Color){255,165,0,220},   "Comercio",    "Compre e gere pontos de comercio."        },
+                { (Color){50,205,50,220},   "Sorte",       "Puxe uma carta de evento positivo."       },
+                { (Color){210,50,50,220},   "Azar",        "Puxe uma carta de evento negativo."       },
+                { (Color){160,100,220,220}, "Evento",      "Puxe uma carta que afeta todos."          },
+            };
+            for (int i = 0; i < 7; i++) {
+                DrawRectangle(rx, y + 2, 14, 14, casas[i].cor);
+                DrawText(casas[i].nome, rx + 20, y, 14, WHITE);
+                int nw = MeasureText(casas[i].nome, 14);
+                DrawText("—", rx + 20 + nw + 4, y, 13, (Color){100,120,160,200});
+                DrawText(casas[i].desc, rx + 20 + nw + 20, y, 13, (Color){180,210,255,180});
+                y += 24;
+            }
+
+            y += 10;
+
+            /* CARTAS DE ACAO */
+            DrawText("CARTAS DE ACAO", rx, y, 16, COR_TITULO);
+            y += 24;
+            DrawLine(rx, y, rx + 470, y, (Color){255,140,30,60});
+            y += 10;
+
+            const char *acoes[] = {
+                "Acao de Turismo   — Pontos extras por propriedades de turismo",
+                "Recife em Festa   — Dobra seus pontos por 2 turnos",
+                "Acao de Comercio  — Pontos extras por propriedades de comercio",
+                "Parceria          — Voce e um aliado ganham pontos em tudo",
+            };
+            for (int i = 0; i < 4; i++) {
+                DrawRectangle(rx, y + 3, 10, 10, COR_PINO[i]);
+                DrawText(acoes[i], rx + 18, y, 13, (Color){180,210,255,180});
+                y += 22;
+            }
+
+            y += 14;
+            DrawText("Clique na carta no rodape da tela para usa-la no seu turno.",
+                     rx, y, 13, (Color){130,150,190,200});
+
+            /* Rodapé */
+            DrawLineEx((Vector2){300, 650}, (Vector2){980, 650}, 1, COR_LINHA);
+            tw = MeasureText("[ESC]  Voltar ao menu", 16);
+            DrawText("[ESC]  Voltar ao menu", LARGURA/2 - tw/2, 660, 16, COR_SUBTITULO);
             break;
         }
 
