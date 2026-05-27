@@ -15,7 +15,6 @@ Ranking ranking_criar(const Jogador *jogadores, int num_jogadores)
     return r;
 }
 
-/* Insertion sort — decrescente por pontos_total; empate → mais moedas */
 void ranking_ordenar(Ranking *r)
 {
     for (int i = 1; i < r->n; i++) {

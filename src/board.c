@@ -36,7 +36,6 @@ static Casa *casa_alocar(int id, const char *nome, TipoCasa tipo, SetorCasa seto
     return c;
 }
 
-/* Insere `nova` ao final da lista circular (antes de cabeca) */
 static void lista_inserir(Tabuleiro *tab, Casa *nova)
 {
     if (tab->cabeca == NULL) {
@@ -52,10 +51,6 @@ static void lista_inserir(Tabuleiro *tab, Casa *nova)
     }
     tab->tamanho++;
 }
-
-/* ------------------------------------------------------------------ */
-/* API pública                                                          */
-/* ------------------------------------------------------------------ */
 
 Tabuleiro *tabuleiro_criar(void)
 {
@@ -156,10 +151,6 @@ Casa *tabuleiro_buscar_id(const Tabuleiro *tab, int id)
     return NULL;
 }
 
-/* ------------------------------------------------------------------ */
-/* Debug                                                                */
-/* ------------------------------------------------------------------ */
-
 static const char *str_tipo(TipoCasa t)
 {
     switch (t) {
@@ -197,7 +188,6 @@ void tabuleiro_imprimir(const Tabuleiro *tab)
         c = c->next;
     } while (c != tab->cabeca);
 
-    /* Verifica integridade da lista circular */
     int ok = (tab->cabeca->prev->next == tab->cabeca);
     printf("Integridade circular: %s\n", ok ? "OK" : "ERRO");
 }

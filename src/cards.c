@@ -3,10 +3,6 @@
 #include <string.h>
 #include <time.h>
 
-/* ------------------------------------------------------------------ */
-/* Dados estáticos das cartas                                           */
-/* ------------------------------------------------------------------ */
-
 static const Carta SORTE_DADOS[] = {
     { 100, "Patrocínio Cultural",
       "Uma empresa patrocina eventos culturais no Recife Antigo.",
@@ -65,9 +61,6 @@ static const Carta EVENTO_DADOS[] = {
       CARTA_EVENTO, EFEITO_PROPRIETARIOS_BONUS, SETOR_TECNOLOGIA, 1 },
 };
 
-/* ------------------------------------------------------------------ */
-/* Fisher-Yates shuffle                                                 */
-/* ------------------------------------------------------------------ */
 static void embaralhar(int *ids, int n)
 {
     for (int i = n - 1; i > 0; i--) {
@@ -78,9 +71,6 @@ static void embaralhar(int *ids, int n)
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* Inicializa um baralho: insere cartas na hash e embaralha os IDs     */
-/* ------------------------------------------------------------------ */
 static int init_baralho(HashTable *ht, Baralho *b,
                         const Carta *dados, int n)
 {
@@ -96,10 +86,6 @@ static int init_baralho(HashTable *ht, Baralho *b,
     embaralhar(b->ids, n);
     return 1;
 }
-
-/* ------------------------------------------------------------------ */
-/* Ciclo de vida                                                        */
-/* ------------------------------------------------------------------ */
 
 SistemaCartas *cartas_criar(void)
 {
@@ -132,16 +118,11 @@ SistemaCartas *cartas_criar(void)
 void cartas_destruir(SistemaCartas *sc)
 {
     if (!sc) return;
-    /* free libera cada Carta* alocado em init_baralho */
+    
     ht_destruir(sc->tabela, free);
     free(sc);
 }
 
-/* ------------------------------------------------------------------ */
-/* Operações de jogo                                                    */
-/* ------------------------------------------------------------------ */
-
-/* Puxar do topo e avançar; ao esgotar, recomeça do início (wrap) */
 const Carta *cartas_puxar_sorte(SistemaCartas *sc)
 {
     if (!sc || sc->sorte.total == 0) return NULL;
@@ -172,9 +153,6 @@ const Carta *cartas_buscar(const SistemaCartas *sc, int id)
     return (const Carta *)ht_buscar(sc->tabela, id);
 }
 
-/* ------------------------------------------------------------------ */
-/* Aplicação de efeito                                                  */
-/* ------------------------------------------------------------------ */
 #include "player.h"
 
 Casa *carta_aplicar_efeito(const Carta *carta,
@@ -256,7 +234,7 @@ void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, i
     int multi = (j->turnos_festa > 0 && acao_id != 1) ? 2 : 1;
     
     if (acao_id == 0) {
-        // Turismo
+        
         j->pontos[SETOR_TURISMO] += 1 * multi;
         Casa *c = tab->cabeca;
         do {
@@ -266,10 +244,10 @@ void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, i
             c = c->next;
         } while (c != tab->cabeca);
     } else if (acao_id == 1) {
-        // Festa (2 rounds)
+        
         j->turnos_festa = 2;
     } else if (acao_id == 2) {
-        // Comercio
+        
         j->pontos[SETOR_COMERCIO] += 1 * multi;
         Casa *c = tab->cabeca;
         do {
@@ -279,7 +257,7 @@ void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, i
             c = c->next;
         } while (c != tab->cabeca);
     } else if (acao_id == 3) {
-        // Parceria
+        
         if (alvo_idx >= 0 && alvo_idx < num_jogadores && alvo_idx != jogador_atual) {
             Jogador *alvo = &jogadores[alvo_idx];
             int a_multi = alvo->turnos_festa > 0 ? 2 : 1;

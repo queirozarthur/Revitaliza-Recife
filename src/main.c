@@ -22,13 +22,8 @@ typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO, T
 #define COR_TEXTO_BTN  (Color){220, 235, 255, 255}
 #define COR_LINHA      (Color){255, 140,  30, 180}
 
-/* Acesso ao jogador do turno atual */
 #define J_ATUAL (&jogadores[jogador_atual])
 #define IS_BOT  (jogadores[jogador_atual].tipo == TIPO_BOT)
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                              */
-/* ------------------------------------------------------------------ */
 
 static int passou_marco_zero(int id_antes, int id_depois)
 {
@@ -59,9 +54,6 @@ static void iniciar_dado(AnimacaoTurno *anim, int *ultimo_dado)
     *ultimo_dado           = anim->resultado;
 }
 
-/* ------------------------------------------------------------------ */
-/* Ranking persistente (arquivo ranking.txt)                            */
-/* ------------------------------------------------------------------ */
 typedef struct {
     char nome[48];
     int  pts;
@@ -69,7 +61,6 @@ typedef struct {
     char data[32];
 } EntradaRankingMenu;
 
-/* Lê ranking.txt uma única vez e armazena em memória */
 static void carregar_ranking_menu(EntradaRankingMenu *entradas, int *n)
 {
     *n = 0;
@@ -86,9 +77,6 @@ static void carregar_ranking_menu(EntradaRankingMenu *entradas, int *n)
     fclose(f);
 }
 
-/* ------------------------------------------------------------------ */
-/* main                                                                 */
-/* ------------------------------------------------------------------ */
 int main(void)
 {
     srand(time(NULL));
@@ -101,7 +89,7 @@ int main(void)
     Jogador        jogadores[NUM_JOGADORES];
     int            jogador_atual   = 0;
     int            hud_jogador_focado = -1;
-    float          bot_delay       = -1.0f;  /* < 0 = timer não iniciado */
+    float          bot_delay       = -1.0f;  
     int            turno_terminado = 0;
 
     AnimacaoTurno anim    = {0};
@@ -124,7 +112,7 @@ int main(void)
     textura_cartas_acao[3] = LoadTexture("assets/Carta_Acao_4.png");
 
     int num_humanos = 1;
-    int selecao_fase = 0; // 0: num_humanos, 1: escolhendo avatares
+    int selecao_fase = 0; 
     int humano_atual = 0;
     int avatar_escolhido[NUM_JOGADORES] = {-1, -1, -1, -1};
     int avatar_disponivel[4] = {1, 1, 1, 1};
@@ -133,7 +121,6 @@ int main(void)
     float ordem_timer_dado = 0.0f;
     int ordem_resultados[NUM_JOGADORES] = {0};
 
-    /* Botões do menu principal */
 #define NUM_BOTOES_MENU 4
     struct { Rectangle rect; const char *texto; } botoes_menu[NUM_BOTOES_MENU] = {
         { (Rectangle){540, 260, 200, 50}, "[1] Iniciar Jogo" },
@@ -142,7 +129,6 @@ int main(void)
         { (Rectangle){540, 470, 200, 50}, "[0] Sair"         },
     };
 
-    /* Geometria dos botões de seleção (usada em update e draw) */
     const int SEL_BW = 110, SEL_BH = 80, SEL_GAP = 28;
     const int SEL_TOTAL_W = NUM_JOGADORES * SEL_BW + (NUM_JOGADORES - 1) * SEL_GAP;
     const int SEL_BX = LARGURA / 2 - SEL_TOTAL_W / 2;
@@ -158,12 +144,8 @@ int main(void)
         Vector2 mouse = GetMousePosition();
         float   dt    = GetFrameTime();
 
-        /* ==================================================================
-         * UPDATE
-         * ================================================================== */
         switch (estado) {
 
-        /* ---- MENU ---- */
         case TELA_MENU:
             if (IsKeyPressed(KEY_ONE)  || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
             if (IsKeyPressed(KEY_TWO)  || IsKeyPressed(KEY_KP_2)) {
@@ -186,12 +168,11 @@ int main(void)
             }
             break;
 
-        /* ---- SELECAO ---- */
         case TELA_SELECAO: {
             if (IsKeyPressed(KEY_ESCAPE)) { estado = TELA_MENU; break; }
 
             if (selecao_fase == 0) {
-                /* Escolha a quantidade de humanos */
+                
                 int k_sel = 0;
                 for (int k = 1; k <= NUM_JOGADORES; k++) {
                     if (IsKeyPressed(KEY_ONE + (k - 1)) || IsKeyPressed(KEY_KP_1 + (k - 1))) k_sel = k;
@@ -206,7 +187,7 @@ int main(void)
                     for(int i=0; i<4; i++) { avatar_escolhido[i] = -1; avatar_disponivel[i] = 1; }
                 }
             } else if (selecao_fase == 1) {
-                /* Escolha do avatar para cada humano */
+                
                 int av_sel = -1;
                 for (int k = 0; k < 4; k++) {
                     if (!avatar_disponivel[k]) continue;
@@ -221,7 +202,7 @@ int main(void)
                     humano_atual++;
 
                     if (humano_atual >= num_humanos) {
-                        /* Preenche os bots com os avatares restantes */
+                        
                         for (int i = num_humanos; i < NUM_JOGADORES; i++) {
                             for(int a=0; a<4; a++) {
                                 if(avatar_disponivel[a]) {
@@ -232,7 +213,6 @@ int main(void)
                             }
                         }
 
-                        /* Reinicia o jogo e cria jogadores */
                         if (tabuleiro) tabuleiro_destruir(tabuleiro);
                         if (cartas)    cartas_destruir(cartas);
                         tabuleiro = tabuleiro_criar();
@@ -260,7 +240,6 @@ int main(void)
             break;
         }
 
-        /* ---- ORDEM ---- */
         case TELA_ORDEM: {
             if (ordem_rolagem_atual < NUM_JOGADORES) {
                 ordem_timer_dado += dt;
@@ -280,7 +259,7 @@ int main(void)
                     }
                 }
                 
-                if (ordem_timer_dado > 1.2f) { // Após 1.2s rolando
+                if (ordem_timer_dado > 1.2f) { 
                     ordem_resultados[ordem_rolagem_atual] = rand() % 6 + 1;
                     anim.face_atual = ordem_resultados[ordem_rolagem_atual];
                     anim.estado = TURNO_AGUARDANDO;
@@ -292,8 +271,8 @@ int main(void)
             } else {
                 ordem_timer_dado += dt;
                 anim.estado = TURNO_AGUARDANDO;
-                if (ordem_timer_dado > 3.0f || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { // Espera mostrar o resultado
-                    /* Ordena os jogadores baseado no dado rolado (Insertion Sort para O(N^2) mas como N=4 é constante) */
+                if (ordem_timer_dado > 3.0f || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { 
+                    
                     for (int i = 1; i < NUM_JOGADORES; i++) {
                         Jogador key_j = jogadores[i];
                         int key_r = ordem_resultados[i];
@@ -322,9 +301,8 @@ int main(void)
             break;
         }
 
-        /* ---- JOGO ---- */
         case TELA_JOGO: {
-            /* Controle do HUD (mouse e teclado) */
+            
             if (IsKeyPressed(KEY_ONE)   || IsKeyPressed(KEY_KP_1)) hud_jogador_focado = 0;
             if (IsKeyPressed(KEY_TWO)   || IsKeyPressed(KEY_KP_2)) hud_jogador_focado = 1;
             if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) hud_jogador_focado = 2;
@@ -332,8 +310,8 @@ int main(void)
             if (IsKeyPressed(KEY_ESCAPE)) hud_jogador_focado = -1;
             
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                /* Verifica cliques na lista de jogadores do HUD */
-                int hx = 962, hy = 352; /* Posição Y onde começa a mini-lista em render_hud */
+                
+                int hx = 962, hy = 352; 
                 for (int i = 0; i < NUM_JOGADORES; i++) {
                     Rectangle br = { hx, hy - 2, 308 - 10, 20 };
                     if (CheckCollisionPointRec(mouse, br)) {
@@ -343,7 +321,6 @@ int main(void)
                 }
             }
 
-            /* 1. Avança turno se o anterior terminou */
             if (turno_terminado) {
                 if (jogador_venceu(J_ATUAL)) {
                     ranking         = ranking_criar(jogadores, NUM_JOGADORES);
@@ -351,7 +328,6 @@ int main(void)
                     estado          = TELA_RESULTADO;
                     turno_terminado = 0;
 
-                    /* Salva o vencedor no arquivo de recordes */
                     {
                         time_t t = time(NULL);
                         struct tm *tm_info = localtime(&t);
@@ -379,7 +355,6 @@ int main(void)
                 turno_terminado = 0;
             }
 
-            /* 2. TURNO_AGUARDANDO */
             if (anim.estado == TURNO_AGUARDANDO) {
                 if (IS_BOT) {
                     if (bot_delay < 0.0f) bot_delay = 1.0f;
@@ -390,7 +365,7 @@ int main(void)
                             J_ATUAL->turnos_bloqueado--;
                             turno_terminado = 1;
                         } else {
-                            // Bot intelligence for Action Cards (25% chance to use a card if has one)
+                            
                             int has_card = (J_ATUAL->cartas_acao[0] != -1 || J_ATUAL->cartas_acao[1] != -1);
                             if (has_card && GetRandomValue(1, 100) <= 25) {
                                 int slot = (J_ATUAL->cartas_acao[0] != -1) ? 0 : 1;
@@ -399,7 +374,7 @@ int main(void)
                                 }
                                 anim.acao_slot = slot;
                                 anim.acao_carta_id = J_ATUAL->cartas_acao[slot];
-                                anim.acao_alvo_idx = (jogador_atual + 1) % NUM_JOGADORES; // Default target
+                                anim.acao_alvo_idx = (jogador_atual + 1) % NUM_JOGADORES; 
                                 anim.estado = TURNO_USANDO_ACAO;
                             } else {
                                 iniciar_dado(&anim, &ultimo_dado);
@@ -413,7 +388,7 @@ int main(void)
                             turno_terminado = 1;
                         }
                     } else {
-                        // Check Action Card Clicks
+                        
                         Vector2 mouse = GetMousePosition();
                         int clicou_carta = 0;
                         for (int i=0; i<2; i++) {
@@ -436,7 +411,6 @@ int main(void)
                 }
             }
 
-            /* 3. Animação do dado */
             if (anim.estado == TURNO_DADO_GIRANDO) {
                 anim.timer_dado    += dt;
                 anim.proximo_flash -= dt;
@@ -467,7 +441,6 @@ int main(void)
                 }
             }
 
-            /* 4. Animação do pino */
             if (anim.estado == TURNO_PINO_MOVENDO) {
                 anim.timer_passo += dt;
 
@@ -497,15 +470,15 @@ int main(void)
                         } else if (J_ATUAL->posicao->tipo == CASA_PROPRIEDADE) {
                             anim.casa_ativa = J_ATUAL->posicao;
                             if (J_ATUAL->posicao->proprietario < 0) {
-                                /* livre para comprar */
+                                
                                 anim.eh_aluguel = 0;
                                 anim.estado     = TURNO_MOSTRANDO_PROPRIEDADE;
                             } else if (J_ATUAL->posicao->proprietario != jogador_atual) {
-                                /* dono é outro jogador */
+                                
                                 anim.eh_aluguel = 1;
                                 anim.estado     = TURNO_MOSTRANDO_PROPRIEDADE;
                             } else {
-                                /* jogador atual já é dono */
+                                
                                 anim.casa_ativa = NULL;
                                 anim.estado     = TURNO_AGUARDANDO;
                                 turno_terminado = 1;
@@ -538,13 +511,8 @@ int main(void)
             if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
             break;
 
-        } /* fim switch update */
+        } 
 
-        /* ==================================================================
-         * OVERLAYS — tratados fora do switch principal
-         * ================================================================== */
-         
-        /* Esperando jogador puxar a carta (clicando no deck ou apertando botão) */
         if (anim.estado == TURNO_ESPERANDO_COMPRA_CARTA && anim.carta_ativa) {
             int clicou = 0;
             if (!IS_BOT) {
@@ -564,7 +532,7 @@ int main(void)
                     }
                 }
             } else {
-                /* Bot puxa a carta sozinho após um tempo */
+                
                 if (bot_delay < 0.0f) bot_delay = 0.5f;
                 bot_delay -= dt;
                 if (bot_delay <= 0.0f) {
@@ -579,16 +547,14 @@ int main(void)
             }
         }
         
-        /* Animação da carta subindo do deck */
         if (anim.estado == TURNO_ANIMANDO_COMPRA_CARTA) {
-            anim.timer_carta += dt / 0.5f; /* 0.5 segundos de animação */
+            anim.timer_carta += dt / 0.5f; 
             if (anim.timer_carta >= 1.0f) {
                 anim.timer_carta = 1.0f;
                 anim.estado = TURNO_MOSTRANDO_CARTA;
             }
         }
 
-        /* Mostrando a carta já puxada */
         if (anim.estado == TURNO_MOSTRANDO_CARTA && anim.carta_ativa) {
             if (!IS_BOT) {
                 if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
@@ -612,11 +578,10 @@ int main(void)
             }
         }
 
-        /* Propriedade */
         if (anim.estado == TURNO_MOSTRANDO_PROPRIEDADE && anim.casa_ativa) {
             if (!IS_BOT) {
                 if (!anim.eh_aluguel) {
-                    /* Compra */
+                    
                     if (IsKeyPressed(KEY_C) &&
                         J_ATUAL->moedas >= anim.casa_ativa->custo) {
                         J_ATUAL->moedas -= anim.casa_ativa->custo;
@@ -632,11 +597,11 @@ int main(void)
                         turno_terminado = 1;
                     }
                 } else {
-                    /* Aluguel — se não tiver moedas entra em venda forçada */
+                    
                     if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                         int aluguel = anim.casa_ativa->custo / 2;
                         if (J_ATUAL->moedas < aluguel) {
-                            /* Não tem saldo: abre overlay de venda */
+                            
                             anim.venda_divida      = aluguel;
                             anim.venda_selecionada = 0;
                             anim.estado            = TURNO_VENDENDO_PROPRIEDADE;
@@ -652,13 +617,13 @@ int main(void)
                     }
                 }
             } else {
-                /* Bot decide automaticamente */
+                
                 if (bot_delay < 0.0f) bot_delay = 0.8f;
                 bot_delay -= dt;
                 if (bot_delay <= 0.0f) {
                     bot_delay = -1.0f;
                     if (!anim.eh_aluguel) {
-                        /* Bot compra se tiver moedas */
+                        
                         if (J_ATUAL->moedas >= anim.casa_ativa->custo) {
                             J_ATUAL->moedas -= anim.casa_ativa->custo;
                             int multi = J_ATUAL->turnos_festa > 0 ? 2 : 1;
@@ -668,7 +633,7 @@ int main(void)
                     } else {
                         int aluguel = anim.casa_ativa->custo / 2;
                         if (!IS_BOT && J_ATUAL->moedas < aluguel) {
-                            /* Bot sem moedas: paga o que tem */
+                            
                         }
                         J_ATUAL->moedas -= aluguel;
                         if (J_ATUAL->moedas < 0) J_ATUAL->moedas = 0;
@@ -683,7 +648,6 @@ int main(void)
             }
         }
         
-        /* Uso de Carta de Ação */
         if (anim.estado == TURNO_USANDO_ACAO) {
             if (!IS_BOT) {
                 Vector2 mouse = GetMousePosition();
@@ -721,9 +685,8 @@ int main(void)
             }
         }
 
-        /* Venda forçada de propriedade */
         if (anim.estado == TURNO_VENDENDO_PROPRIEDADE) {
-            /* Coleta propriedades do jogador atual */
+            
             Casa *props[24];
             int   n_props = 0;
             Casa *c_iter = tabuleiro->cabeca;
@@ -736,23 +699,22 @@ int main(void)
 
             int falta = anim.venda_divida - J_ATUAL->moedas;
 
-            /* Clique em uma linha da lista */
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                 const int PW = 620, PH = 520;
                 const int PX = (1280 - PW) / 2;
                 const int PY = (720  - PH) / 2;
-                int row_y = PY + 68 + 22 + 28 + 10 + 10 + 20; /* mesmo cálculo do render */
+                int row_y = PY + 68 + 22 + 28 + 10 + 10 + 20; 
                 for (int i = 0; i < n_props && row_y + 44 < PY + PH - 60; i++) {
                     Rectangle row = {(float)(PX+20), (float)row_y, (float)(PW-40), 38.0f};
                     if (CheckCollisionPointRec(mouse, row)) {
-                        /* Vende: devolve metade do custo e remove propriedade */
+                        
                         int revenda = props[i]->custo / 2;
                         J_ATUAL->moedas += revenda;
-                        /* Desconta os pontos que a propriedade gerou */
+                        
                         J_ATUAL->pontos[props[i]->setor] -= props[i]->pontos;
                         if (J_ATUAL->pontos[props[i]->setor] < 0)
                             J_ATUAL->pontos[props[i]->setor] = 0;
-                        props[i]->proprietario = -1; /* libera a propriedade */
+                        props[i]->proprietario = -1; 
                         anim.venda_selecionada = 0;
                         break;
                     }
@@ -760,12 +722,11 @@ int main(void)
                 }
             }
 
-            /* Confirma pagamento quando tiver saldo suficiente */
             if ((IsKeyPressed(KEY_ENTER)) && falta <= 0) {
                 int aluguel = anim.venda_divida;
                 J_ATUAL->moedas -= aluguel;
                 if (J_ATUAL->moedas < 0) J_ATUAL->moedas = 0;
-                /* Paga ao dono se for aluguel */
+                
                 if (anim.casa_ativa && anim.eh_aluguel) {
                     int dono = anim.casa_ativa->proprietario;
                     if (dono >= 0 && dono < NUM_JOGADORES)
@@ -776,7 +737,6 @@ int main(void)
                 turno_terminado = 1;
             }
 
-            /* ESC: paga o que tem e continua (sem moedas negativas) */
             if (IsKeyPressed(KEY_ESCAPE)) {
                 int pode_pagar = J_ATUAL->moedas;
                 if (anim.casa_ativa && anim.eh_aluguel) {
@@ -791,15 +751,11 @@ int main(void)
             }
         }
 
-        /* ==================================================================
-         * DRAW
-         * ================================================================== */
         BeginDrawing();
         ClearBackground(COR_FUNDO);
 
         switch (estado) {
 
-        /* ---- MENU ---- */
         case TELA_MENU: {
             DrawLineEx((Vector2){100,130}, (Vector2){100,580}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
@@ -832,7 +788,6 @@ int main(void)
             break;
         }
 
-        /* ---- SELECAO ---- */
         case TELA_SELECAO: {
             DrawLineEx((Vector2){100,130}, (Vector2){100,580}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
@@ -847,7 +802,6 @@ int main(void)
 
                 DrawLineEx((Vector2){340,248}, (Vector2){940,248}, 1, COR_LINHA);
 
-                /* Botões [1]–[4] */
                 for (int k = 1; k <= NUM_JOGADORES; k++) {
                     Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
                                       SEL_BW, SEL_BH };
@@ -866,14 +820,13 @@ int main(void)
                              26, hover ? COR_FUNDO : COR_TEXTO_BTN);
                 }
 
-                /* Preview de jogadores por número selecionado via hover */
                 int hover_k = 0;
                 for (int k = 1; k <= NUM_JOGADORES; k++) {
                     Rectangle br = { SEL_BX + (k-1)*(SEL_BW+SEL_GAP), SEL_BY,
                                       SEL_BW, SEL_BH };
                     if (CheckCollisionPointRec(mouse, br)) hover_k = k;
                 }
-                if (hover_k == 0) hover_k = 1; /* default preview */
+                if (hover_k == 0) hover_k = 1; 
 
                 int py = SEL_BY + SEL_BH + 30;
                 for (int i = 0; i < NUM_JOGADORES; i++) {
@@ -937,7 +890,6 @@ int main(void)
             break;
         }
 
-        /* ---- ORDEM ---- */
         case TELA_ORDEM: {
             DrawLineEx((Vector2){100,130}, (Vector2){100,580}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,130},(Vector2){1180,580},2, COR_LINHA);
@@ -950,23 +902,22 @@ int main(void)
             DrawText(sub, LARGURA/2 - tw/2, 210, 22, COR_SUBTITULO);
 
             if (ordem_rolagem_atual < NUM_JOGADORES) {
-                /* Exibe apenas o jogador atual rolando no centro da tela */
+                
                 int p = ordem_rolagem_atual;
                 char texto[64];
                 snprintf(texto, sizeof(texto), "%s", jogadores[p].nome);
                 
                 int tw = MeasureText(texto, 32);
-                int start_x = LARGURA / 2 - tw / 2 - 40; // Desloca para a esquerda para acomodar o dado
+                int start_x = LARGURA / 2 - tw / 2 - 40; 
                 int py = 320;
                 
                 DrawText(texto, start_x, py, 32, COR_PINO[p]);
                 DrawText("Rolando...", start_x, py + 40, 20, (Color){200, 200, 200, 255});
                 
-                /* Desenha o dado animado ao lado do nome */
                 render_dado_simples(anim.face_atual, start_x + tw + 60, py + 25, 40, anim.jitter_x, anim.jitter_y, 1);
                 
             } else {
-                /* Exibe a lista final ordenada */
+                
                 int py = 250;
                 const char *titulo = "Ordem Definida!";
                 int tw = MeasureText(titulo, 32);
@@ -988,7 +939,6 @@ int main(void)
             break;
         }
 
-        /* ---- JOGO ---- */
         case TELA_JOGO: {
             int festa = 0;
             for (int i=0; i<NUM_JOGADORES; i++) {
@@ -1006,7 +956,6 @@ int main(void)
             break;
         }
 
-        /* ---- RESULTADO ---- */
         case TELA_RESULTADO: {
             DrawLineEx((Vector2){100,80},  (Vector2){100,650}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,80}, (Vector2){1180,650},2, COR_LINHA);
@@ -1016,16 +965,15 @@ int main(void)
             DrawLineEx((Vector2){340,138}, (Vector2){940,138}, 1, COR_LINHA);
 
             static const Color medalha[] = {
-                {255, 215, 0, 255},   /* ouro   */
-                {192, 192, 192, 255}, /* prata  */
-                {205, 127, 50, 255},  /* bronze */
-                {180, 210, 255, 200}, /* 4o     */
+                {255, 215, 0, 255},   
+                {192, 192, 192, 255}, 
+                {205, 127, 50, 255},  
+                {180, 210, 255, 200}, 
             };
 
             for (int i = 0; i < ranking.n; i++) {
                 int ry = 170 + i * 100;
 
-                /* Painel do jogador */
                 Color fundo = (i == 0)
                               ? (Color){40, 35, 10, 220}
                               : (Color){15, 25, 50, 180};
@@ -1034,13 +982,10 @@ int main(void)
                 DrawRectangleRoundedLines(
                     (Rectangle){200, ry, 880, 80}, 0.12f, 6, medalha[i]);
 
-                /* Posição */
                 char pos[4];
                 snprintf(pos, sizeof(pos), "%d.", i + 1);
                 DrawText(pos, 220, ry + 24, 28, medalha[i]);
 
-                /* Bolinha colorida identificadora */
-                /* Find which original player this is by name */
                 for (int p = 0; p < NUM_JOGADORES; p++) {
                     if (jogadores[p].nome[0] == ranking.entradas[i].nome[0]) {
                         DrawCircle(280, ry + 40, 14, COR_PINO[p]);
@@ -1048,10 +993,8 @@ int main(void)
                     }
                 }
 
-                /* Nome */
                 DrawText(ranking.entradas[i].nome, 306, ry + 20, 22, WHITE);
 
-                /* Pontos e moedas */
                 char info[64];
                 snprintf(info, sizeof(info), "%d pontos totais   $ %d moedas",
                          ranking.entradas[i].pontos_total,
@@ -1059,7 +1002,6 @@ int main(void)
                 DrawText(info, 306, ry + 48, 15, medalha[i]);
             }
 
-            /* Campeão destacado */
             if (ranking.n > 0) {
                 char campeao[64];
                 snprintf(campeao, sizeof(campeao),
@@ -1075,7 +1017,6 @@ int main(void)
             break;
         }
 
-        /* ---- RANKING (menu) ---- */
         case TELA_RANKING: {
             static const Color medalha_r[] = {
                 {255, 215,   0, 255},
@@ -1099,7 +1040,7 @@ int main(void)
                 tw = MeasureText(dica, 16);
                 DrawText(dica, LARGURA/2 - tw/2, 360, 16, (Color){100,120,160,180});
             } else {
-                /* Cabeçalho */
+                
                 DrawRectangle(210, 92, 860, 28, (Color){20,35,65,255});
                 DrawText("#",      228, 98, 15, COR_SUBTITULO);
                 DrawText("Nome",   270, 98, 15, COR_SUBTITULO);
@@ -1151,7 +1092,6 @@ int main(void)
             break;
         }
 
-        /* ---- INSTRUCOES ---- */
         case TELA_INSTRUCOES: {
             DrawLineEx((Vector2){100,80},  (Vector2){100,660}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,80}, (Vector2){1180,660},2, COR_LINHA);
@@ -1160,7 +1100,6 @@ int main(void)
             DrawText("INSTRUCOES", LARGURA/2 - tw/2, 80, 48, COR_TITULO);
             DrawLineEx((Vector2){340,142}, (Vector2){940,142}, 1, COR_LINHA);
 
-            /* ---- Painel esquerdo ---- */
             DrawRectangleRounded((Rectangle){120,160, 480,440}, 0.06f, 6,
                                  (Color){15,25,50,200});
             DrawRectangleRoundedLines((Rectangle){120,160, 480,440}, 0.06f, 6,
@@ -1192,7 +1131,6 @@ int main(void)
             DrawText("Marco Zero -> Bonus de moedas",148,548, 15, COR_SUBTITULO);
             DrawText("Bloqueio   -> Perde um turno", 148,568, 15, COR_SUBTITULO);
 
-            /* ---- Painel direito ---- */
             DrawRectangleRounded((Rectangle){640,160, 520,440}, 0.06f, 6,
                                  (Color){15,25,50,200});
             DrawRectangleRoundedLines((Rectangle){640,160, 520,440}, 0.06f, 6,

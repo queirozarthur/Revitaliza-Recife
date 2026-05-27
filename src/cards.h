@@ -48,17 +48,14 @@ typedef struct {
     Baralho    evento;
 } SistemaCartas;
 
-/* --- ciclo de vida --- */
 SistemaCartas *cartas_criar(void);
 void           cartas_destruir(SistemaCartas *sc);
 
-/* --- operações de jogo --- */
 const Carta *cartas_puxar_sorte(SistemaCartas *sc);
 const Carta *cartas_puxar_azar(SistemaCartas *sc);
 const Carta *cartas_puxar_evento(SistemaCartas *sc);
 const Carta *cartas_buscar(const SistemaCartas *sc, int id);
 
-/* --- efeito --- */
 #include "player.h"
 Casa *carta_aplicar_efeito(const Carta *carta,
                            Jogador *jogadores, int num_jogadores,
@@ -67,4 +64,4 @@ Casa *carta_aplicar_efeito(const Carta *carta,
 
 void usar_carta_acao(Jogador *jogadores, int num_jogadores, int jogador_atual, int acao_id, int alvo_idx, Tabuleiro *tab);
 
-#endif /* CARDS_H */
+#endif 

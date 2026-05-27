@@ -2,18 +2,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/* ------------------------------------------------------------------ */
-/* Função de hash — divisão simples; eficiente para IDs inteiros       */
-/* ------------------------------------------------------------------ */
 static int hash(int chave, int capacidade)
 {
-    /* Garante índice positivo mesmo para chaves negativas */
+    
     return ((chave % capacidade) + capacidade) % capacidade;
 }
-
-/* ------------------------------------------------------------------ */
-/* Ciclo de vida                                                        */
-/* ------------------------------------------------------------------ */
 
 HashTable *ht_criar(int capacidade)
 {
@@ -45,17 +38,12 @@ void ht_destruir(HashTable *ht, void (*liberar_valor)(void *))
     free(ht);
 }
 
-/* ------------------------------------------------------------------ */
-/* Operações                                                            */
-/* ------------------------------------------------------------------ */
-
 int ht_inserir(HashTable *ht, int chave, void *valor)
 {
     if (!ht) return 0;
 
     int idx = hash(chave, ht->capacidade);
 
-    /* Atualiza se a chave já existe */
     for (HtNo *no = ht->buckets[idx]; no; no = no->prox) {
         if (no->chave == chave) {
             no->valor = valor;
@@ -63,7 +51,6 @@ int ht_inserir(HashTable *ht, int chave, void *valor)
         }
     }
 
-    /* Insere na frente do bucket */
     HtNo *novo = (HtNo *)malloc(sizeof(HtNo));
     if (!novo) return 0;
 
@@ -109,10 +96,6 @@ int ht_remover(HashTable *ht, int chave, void (*liberar_valor)(void *))
     }
     return 0;
 }
-
-/* ------------------------------------------------------------------ */
-/* Debug                                                                */
-/* ------------------------------------------------------------------ */
 
 void ht_imprimir(const HashTable *ht)
 {
