@@ -60,6 +60,33 @@ static void iniciar_dado(AnimacaoTurno *anim, int *ultimo_dado)
 }
 
 /* ------------------------------------------------------------------ */
+/* Ranking persistente (arquivo ranking.txt)                            */
+/* ------------------------------------------------------------------ */
+typedef struct {
+    char nome[48];
+    int  pts;
+    int  moedas;
+    char data[32];
+} EntradaRankingMenu;
+
+/* Lê ranking.txt uma única vez e armazena em memória */
+static void carregar_ranking_menu(EntradaRankingMenu *entradas, int *n)
+{
+    *n = 0;
+    FILE *f = fopen("ranking.txt", "r");
+    if (!f) return;
+    char linha[128];
+    while (fgets(linha, sizeof(linha), f) && *n < 10) {
+        EntradaRankingMenu *e = &entradas[*n];
+        e->data[0] = '\0';
+        if (sscanf(linha, "%47[^;];%d;%d;%31[^\n]",
+                   e->nome, &e->pts, &e->moedas, e->data) >= 3)
+            (*n)++;
+    }
+    fclose(f);
+}
+
+/* ------------------------------------------------------------------ */
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
 int main(void)
@@ -129,8 +156,10 @@ int main(void)
     const int SEL_BX = LARGURA / 2 - SEL_TOTAL_W / 2;
     const int SEL_BY = 290;
 
-    TelaJogo estado    = TELA_MENU;
-    Ranking   ranking  = {0};   /* preenchido ao entrar em TELA_RESULTADO */
+    TelaJogo           estado          = TELA_MENU;
+    Ranking            ranking         = {0};
+    EntradaRankingMenu ranking_menu[10] = {0};
+    int                ranking_menu_n   = 0;
 
     while (!WindowShouldClose()) {
 
@@ -145,14 +174,20 @@ int main(void)
         /* ---- MENU ---- */
         case TELA_MENU:
             if (IsKeyPressed(KEY_ONE)  || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
-            if (IsKeyPressed(KEY_TWO)  || IsKeyPressed(KEY_KP_2)) estado = TELA_RANKING;
+            if (IsKeyPressed(KEY_TWO)  || IsKeyPressed(KEY_KP_2)) {
+                carregar_ranking_menu(ranking_menu, &ranking_menu_n);
+                estado = TELA_RANKING;
+            }
             if (IsKeyPressed(KEY_THREE)|| IsKeyPressed(KEY_KP_3)) estado = TELA_INSTRUCOES;
             if (IsKeyPressed(KEY_ZERO) || IsKeyPressed(KEY_KP_0)) goto sair;
             for (int i = 0; i < NUM_BOTOES_MENU; i++) {
                 if (CheckCollisionPointRec(mouse, botoes_menu[i].rect) &&
                     IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (i == 0) estado = TELA_SELECAO;
-                    if (i == 1) estado = TELA_RANKING;
+                    if (i == 1) {
+                        carregar_ranking_menu(ranking_menu, &ranking_menu_n);
+                        estado = TELA_RANKING;
+                    }
                     if (i == 2) estado = TELA_INSTRUCOES;
                     if (i == NUM_BOTOES_MENU - 1) goto sair;
                 }
@@ -385,11 +420,13 @@ int main(void)
                         strftime(data_str, sizeof(data_str), "%d/%m/%Y %H:%M", tm_info);
                         FILE *f = fopen("ranking.txt", "a");
                         if (f) {
-                            fprintf(f, "%s;%d;%d;%s\n",
-                                    ranking.entradas[0].nome,
-                                    ranking.entradas[0].pontos_total,
-                                    ranking.entradas[0].moedas,
-                                    data_str);
+                            for (int ri = 0; ri < ranking.n; ri++) {
+                                fprintf(f, "%s;%d;%d;%s\n",
+                                        ranking.entradas[ri].nome,
+                                        ranking.entradas[ri].pontos_total,
+                                        ranking.entradas[ri].moedas,
+                                        data_str);
+                            }
                             fclose(f);
                         }
                     }
@@ -562,6 +599,10 @@ int main(void)
 
         case TELA_RANKING:
             if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
+            if (IsKeyPressed(KEY_DELETE)) {
+                remove("ranking.txt");
+                ranking_menu_n = 0;
+            }
             break;
 
         case TELA_INSTRUCOES:
@@ -1144,92 +1185,77 @@ int main(void)
 
         /* ---- RANKING (menu) ---- */
         case TELA_RANKING: {
+            static const Color medalha_r[] = {
+                {255, 215,   0, 255},
+                {192, 192, 192, 255},
+                {205, 127,  50, 255},
+                {180, 210, 255, 200},
+            };
+
             DrawLineEx((Vector2){100,80},  (Vector2){100,650}, 2, COR_LINHA);
             DrawLineEx((Vector2){1180,80}, (Vector2){1180,650},2, COR_LINHA);
 
-            int tw = MeasureText("RANKING", 48);
-            DrawText("RANKING", LARGURA/2 - tw/2, 80, 48, COR_TITULO);
-            DrawLineEx((Vector2){340,142}, (Vector2){940,142}, 1, COR_LINHA);
+            int tw = MeasureText("HISTORICO DE PARTIDAS", 44);
+            DrawText("HISTORICO DE PARTIDAS", LARGURA/2 - tw/2, 24, 44, COR_TITULO);
+            DrawLineEx((Vector2){300,82}, (Vector2){980,82}, 1, COR_LINHA);
 
-            /* Tenta carregar arquivo de recordes */
-            FILE *f = fopen("ranking.txt", "r");
-            if (!f) {
+            if (ranking_menu_n == 0) {
                 const char *vazio = "Nenhuma partida registrada ainda.";
                 tw = MeasureText(vazio, 22);
-                DrawText(vazio, LARGURA/2 - tw/2, 340, 22,
-                         (Color){130, 150, 190, 200});
-                const char *hint2 = "Termine uma partida para registrar seu recorde!";
-                tw = MeasureText(hint2, 16);
-                DrawText(hint2, LARGURA/2 - tw/2, 380, 16,
-                         (Color){100, 120, 160, 180});
+                DrawText(vazio, LARGURA/2 - tw/2, 320, 22, (Color){130,150,190,200});
+                const char *dica = "Termine uma partida para registrar!";
+                tw = MeasureText(dica, 16);
+                DrawText(dica, LARGURA/2 - tw/2, 360, 16, (Color){100,120,160,180});
             } else {
-                static const Color medalha_r[] = {
-                    {255, 215,   0, 255},
-                    {192, 192, 192, 255},
-                    {205, 127,  50, 255},
-                    {180, 210, 255, 200},
-                };
-                /* Cabeçalho da tabela */
-                DrawText("#",      230, 158, 16, COR_SUBTITULO);
-                DrawText("Nome",   290, 158, 16, COR_SUBTITULO);
-                DrawText("Pontos", 700, 158, 16, COR_SUBTITULO);
-                DrawText("Moedas", 870, 158, 16, COR_SUBTITULO);
-                DrawText("Data",   990, 158, 16, COR_SUBTITULO);
-                DrawLineEx((Vector2){210,180}, (Vector2){1070,180}, 1,
+                /* Cabeçalho */
+                DrawRectangle(210, 92, 860, 28, (Color){20,35,65,255});
+                DrawText("#",      228, 98, 15, COR_SUBTITULO);
+                DrawText("Nome",   270, 98, 15, COR_SUBTITULO);
+                DrawText("Pontos", 660, 98, 15, COR_SUBTITULO);
+                DrawText("Moedas", 790, 98, 15, COR_SUBTITULO);
+                DrawText("Data",   920, 98, 15, COR_SUBTITULO);
+                DrawLineEx((Vector2){210,120}, (Vector2){1070,120}, 1,
                            (Color){255,140,30,80});
 
-                char linha[128];
-                int pos = 0;
-                int ry  = 192;
-                while (fgets(linha, sizeof(linha), f) && pos < 10) {
-                    char nome[MAX_NOME_JOGADOR];
-                    int  pts = 0, moedas = 0;
-                    char data[32] = "";
-                    /* formato: "Nome;pontos;moedas;data\n" */
-                    sscanf(linha, "%47[^;];%d;%d;%31[^\n]",
-                           nome, &pts, &moedas, data);
-
+                int ry = 124;
+                for (int pos = 0; pos < ranking_menu_n; pos++) {
+                    EntradaRankingMenu *e = &ranking_menu[pos];
                     Color c = (pos < 4) ? medalha_r[pos]
-                                        : (Color){180, 210, 255, 200};
-
+                                        : (Color){180,210,255,200};
                     Color fundo_linha = (pos % 2 == 0)
-                        ? (Color){15, 28, 55, 180}
-                        : (Color){20, 38, 70, 160};
+                        ? (Color){15,28,55,180} : (Color){20,38,70,160};
 
                     DrawRectangleRounded(
-                        (Rectangle){210, ry, 860, 36}, 0.1f, 4, fundo_linha);
+                        (Rectangle){210, ry, 860, 34}, 0.08f, 4, fundo_linha);
                     DrawRectangleRoundedLines(
-                        (Rectangle){210, ry, 860, 36}, 0.1f, 4, (Color){255,140,30,40});
+                        (Rectangle){210, ry, 860, 34}, 0.08f, 4,
+                        (Color){255,140,30,30});
 
-                    char buf[8];
+                    char buf[16];
                     snprintf(buf, sizeof(buf), "%d.", pos + 1);
-                    DrawText(buf,   230, ry + 9, 18, c);
-                    DrawText(nome,  290, ry + 9, 18, WHITE);
+                    DrawText(buf,      228, ry + 8, 16, c);
+                    DrawText(e->nome,  270, ry + 8, 16, WHITE);
 
-                    char spts[16], smoe[16];
-                    snprintf(spts, sizeof(spts), "%d", pts);
-                    snprintf(smoe, sizeof(smoe), "%d", moedas);
-                    DrawText(spts,  700, ry + 9, 18, c);
-                    DrawText(smoe,  870, ry + 9, 18, c);
-                    if (data[0]) DrawText(data, 990, ry + 9, 14,
-                                         (Color){130,150,190,200});
+                    snprintf(buf, sizeof(buf), "%d pt", e->pts);
+                    DrawText(buf, 660, ry + 8, 16, c);
 
-                    ry  += 42;
-                    pos++;
-                }
-                fclose(f);
+                    snprintf(buf, sizeof(buf), "$ %d", e->moedas);
+                    DrawText(buf, 790, ry + 8, 16, c);
 
-                if (pos == 0) {
-                    const char *vazio = "Arquivo encontrado, mas sem entradas.";
-                    tw = MeasureText(vazio, 18);
-                    DrawText(vazio, LARGURA/2 - tw/2, 340, 18,
-                             (Color){130, 150, 190, 200});
+                    if (e->data[0])
+                        DrawText(e->data, 920, ry + 8, 13,
+                                 (Color){130,150,190,200});
+                    ry += 38;
                 }
             }
 
-            tw = MeasureText("[ESC] ou [ENTER] Voltar ao menu", 16);
-            DrawText("[ESC] ou [ENTER] Voltar ao menu",
-                     LARGURA/2 - tw/2, 640, 16, COR_SUBTITULO);
+            DrawLineEx((Vector2){300,622}, (Vector2){980,622}, 1, COR_LINHA);
+            tw = MeasureText("[DEL] Limpar historico", 13);
+            DrawText("[DEL] Limpar historico",
+                     LARGURA/2 - tw/2 - 200, 634, 13, (Color){180,80,80,200});
+            tw = MeasureText("[ESC] / [ENTER]  Voltar ao menu", 14);
+            DrawText("[ESC] / [ENTER]  Voltar ao menu",
+                     LARGURA/2 - tw/2 + 100, 634, 14, COR_SUBTITULO);
             break;
         }
 
