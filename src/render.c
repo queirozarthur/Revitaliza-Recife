@@ -805,7 +805,7 @@ Rectangle obter_rect_carta_acao(int slot, int hover) {
     return (Rectangle){x, y, cw, ch};
 }
 
-void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim, Font fonte) {
+void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim) {
     if (anim->estado != TURNO_AGUARDANDO && anim->estado != TURNO_USANDO_ACAO) return;
     if (j->tipo != TIPO_HUMANO) return;
     

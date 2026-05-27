@@ -6,22 +6,34 @@
 #include "player.h"
 #include "cards.h"
 
-#define DURACAO_PASSO 0.28f
+#define DURACAO_PASSO 0.45f
 
 typedef enum {
     TURNO_AGUARDANDO,
     TURNO_DADO_GIRANDO,
     TURNO_PINO_MOVENDO,
+<<<<<<< HEAD
     TURNO_ESPERANDO_COMPRA_CARTA, 
     TURNO_ANIMANDO_COMPRA_CARTA,  
     TURNO_MOSTRANDO_CARTA,        
     TURNO_MOSTRANDO_PROPRIEDADE,  
     TURNO_USANDO_ACAO,            
     TURNO_VENDENDO_PROPRIEDADE    
+=======
+    TURNO_ESPERANDO_COMPRA_CARTA, /* Aguarda clique no deck correspondente  */
+    TURNO_ANIMANDO_COMPRA_CARTA,  /* Carta subindo do deck para o centro    */
+    TURNO_MOSTRANDO_CARTA,        /* carta puxada, aguardando fechar        */
+    TURNO_MOSTRANDO_PROPRIEDADE,  /* propriedade — comprar ou pagar aluguel */
+    TURNO_USANDO_ACAO,            /* janela de confirmação de uso de carta de ação */
+    TURNO_VENDENDO_PROPRIEDADE,   /* jogador sem moedas precisa vender para pagar  */
+    TURNO_MENSAGEM_VEZ            /* exibição da mensagem de quem é a vez          */
+>>>>>>> ad25ce8e79a891aa81d2dc509751a3447e27b255
 } EstadoTurno;
 
 typedef struct {
     EstadoTurno   estado;
+    
+    float timer_mensagem_vez;
 
     int   resultado;
     int   face_atual;
@@ -81,7 +93,7 @@ void render_carta_overlay(const AnimacaoTurno *anim);
 void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogador);
 void render_venda_overlay(const AnimacaoTurno *anim, const Jogador *jogador,
                           const Tabuleiro *tab, int jogador_idx);
-void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim, Font fonte);
+void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim);
 void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atual, AnimacaoTurno *anim, Font fonte);
 void render_confetti(int active);
 
