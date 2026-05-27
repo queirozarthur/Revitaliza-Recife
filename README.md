@@ -279,3 +279,7 @@ Bot A;48;120;27/05/2026 14:32
 Bot B;31;80;27/05/2026 14:32
 Bot C;22;60;27/05/2026 14:32
 ```
+
+##  📸 Video da gameplay
+[https://youtu.be/px2nq5NMmjo
+](https://youtu.be/px2nq5NMmjo)
