@@ -1090,7 +1090,7 @@ int main(void)
             render_dado(&anim);
             render_carta_overlay(&anim);
             render_propriedade_overlay(&anim, J_ATUAL);
-            render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
+            render_hud_cartas_acao(J_ATUAL, &anim);
             render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
             render_venda_overlay(&anim, J_ATUAL, tabuleiro, jogador_atual);
 
