@@ -960,7 +960,133 @@ void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atua
     DrawText("[ESC] Cancelar", box.x + 255, box.y + 270, 16, WHITE);
 }
 
-#define NUM_CONFETTI 150
+/* ------------------------------------------------------------------ */
+/* render_venda_overlay                                                 */
+/* ------------------------------------------------------------------ */
+void render_venda_overlay(const AnimacaoTurno *anim, const Jogador *jogador,
+                          const Tabuleiro *tab, int jogador_idx)
+{
+    if (!anim || anim->estado != TURNO_VENDENDO_PROPRIEDADE || !jogador || !tab)
+        return;
+
+    DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 190});
+
+    const int PW = 620, PH = 520;
+    const int PX = (1280 - PW) / 2;
+    const int PY = (720  - PH) / 2;
+
+    DrawRectangleRounded(
+        (Rectangle){(float)(PX+6),(float)(PY+6),(float)PW,(float)PH},
+        0.06f, 8, (Color){0,0,0,120});
+    DrawRectangleRounded(
+        (Rectangle){(float)PX,(float)PY,(float)PW,(float)PH},
+        0.06f, 8, (Color){12,22,48,255});
+    DrawRectangleRoundedLines(
+        (Rectangle){(float)PX,(float)PY,(float)PW,(float)PH},
+        0.06f, 8, (Color){220,60,60,255});
+
+    DrawRectangleRounded(
+        (Rectangle){(float)PX,(float)PY,(float)PW,58.0f},
+        0.06f, 8, (Color){160,30,30,255});
+    DrawRectangle(PX, PY+38, PW, 20, (Color){160,30,30,255});
+
+    const char *header = "VENDA FORCADA";
+    int tw = MeasureText(header, 22);
+    DrawText(header, PX + PW/2 - tw/2, PY + 16, 22, WHITE);
+
+    int ty = PY + 68;
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "Voce deve %d moedas e tem %d. Venda propriedades para pagar.",
+             anim->venda_divida, jogador->moedas);
+    int tw2 = MeasureText(buf, 13);
+    DrawText(buf, PX + PW/2 - tw2/2, ty, 13, (Color){220,160,160,255});
+    ty += 22;
+
+    int falta = anim->venda_divida - jogador->moedas;
+    snprintf(buf, sizeof(buf), "Faltam: %d moedas", falta > 0 ? falta : 0);
+    Color cor_falta = (falta > 0)
+                      ? (Color){255,80,80,255} : (Color){80,220,80,255};
+    tw = MeasureText(buf, 16);
+    DrawText(buf, PX + PW/2 - tw/2, ty, 16, cor_falta);
+    ty += 28;
+
+    DrawLine(PX+20, ty, PX+PW-20, ty, (Color){60,80,120,255});
+    ty += 10;
+
+    /* Coleta propriedades do jogador */
+    Casa *props[24];
+    int   n_props = 0;
+    Casa *c = tab->cabeca;
+    do {
+        if (c->tipo == CASA_PROPRIEDADE && c->proprietario == jogador_idx)
+            props[n_props++] = c;
+        c = c->next;
+    } while (c != tab->cabeca);
+
+    if (n_props == 0) {
+        const char *sem = "Sem propriedades para vender.";
+        tw = MeasureText(sem, 18);
+        DrawText(sem, PX + PW/2 - tw/2, ty + 40, 18, (Color){180,180,180,255});
+    } else {
+        DrawText("Clique para vender (recebe metade do custo):",
+                 PX + 20, ty, 12, (Color){160,180,220,220});
+        ty += 20;
+
+        Vector2 mouse = GetMousePosition();
+        for (int i = 0; i < n_props && ty + 44 < PY + PH - 60; i++) {
+            Rectangle row = {(float)(PX+20), (float)ty, (float)(PW-40), 38.0f};
+            int hover = CheckCollisionPointRec(mouse, row);
+            int sel   = (anim->venda_selecionada == i);
+
+            Color fundo_row = sel        ? (Color){60,130,60,255}
+                            : hover      ? (Color){40,60,100,255}
+                                         : (Color){18,32,64,255};
+            DrawRectangleRounded(row, 0.12f, 5, fundo_row);
+            DrawRectangleRoundedLines(row, 0.12f, 5,
+                sel   ? (Color){80,200,80,255} :
+                hover ? (Color){100,140,220,255} :
+                        (Color){40,60,100,180});
+
+            Color cor_s;
+            const char *setor_str;
+            switch (props[i]->setor) {
+                case SETOR_TECNOLOGIA: cor_s = COR_TEC; setor_str = "TEC"; break;
+                case SETOR_TURISMO:    cor_s = COR_TUR; setor_str = "TUR"; break;
+                case SETOR_COMERCIO:   cor_s = COR_COM; setor_str = "COM"; break;
+                default: cor_s = (Color){150,150,150,255}; setor_str = "---"; break;
+            }
+
+            DrawRectangleRounded((Rectangle){row.x+6, row.y+8, 36, 22}, 0.3f, 4, cor_s);
+            tw = MeasureText(setor_str, 11);
+            DrawText(setor_str, (int)(row.x+6+18-tw/2), (int)(row.y+13), 11, WHITE);
+            DrawText(props[i]->nome, (int)(row.x+50), (int)(row.y+6), 15, WHITE);
+
+            int revenda = props[i]->custo / 2;
+            snprintf(buf, sizeof(buf), "+%d moedas", revenda);
+            tw = MeasureText(buf, 13);
+            DrawText(buf, (int)(row.x + PW - 60 - tw), (int)(row.y+13),
+                     13, (Color){255,215,0,255});
+
+            ty += 44;
+        }
+    }
+
+    DrawLine(PX+20, PY+PH-52, PX+PW-20, PY+PH-52, (Color){60,80,120,255});
+
+    if (falta <= 0) {
+        const char *ok = "[ENTER]  Confirmar pagamento";
+        tw = MeasureText(ok, 15);
+        DrawText(ok, PX + PW/2 - tw/2, PY+PH-40, 15, (Color){80,220,80,255});
+    } else {
+        const char *esc_hint = "[ESC]  Pagar so o que tem e continuar";
+        tw = MeasureText(esc_hint, 12);
+        DrawText(esc_hint, PX + PW/2 - tw/2, PY+PH-40, 12,
+                 (Color){180,130,130,200});
+    }
+}
+
+
 typedef struct {
     Vector2 pos;
     Vector2 vel;

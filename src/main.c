@@ -12,7 +12,7 @@
 #define ALTURA         720
 #define NUM_JOGADORES    4
 
-typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO, TELA_INSTRUCOES } TelaJogo;
+typedef enum { TELA_MENU, TELA_SELECAO, TELA_ORDEM, TELA_JOGO, TELA_RESULTADO, TELA_RANKING, TELA_INSTRUCOES } TelaJogo;
 
 #define COR_FUNDO      (Color){ 10,  20,  40, 255}
 #define COR_TITULO     (Color){255, 140,  30, 255}
@@ -136,21 +136,19 @@ int main(void)
 
         /* ---- MENU ---- */
         case TELA_MENU:
-            if (IsKeyPressed(KEY_ONE)   || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
-            if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) estado = TELA_INSTRUCOES;
-            if (IsKeyPressed(KEY_ZERO)  || IsKeyPressed(KEY_KP_0)) goto sair;
+            if (IsKeyPressed(KEY_ONE)  || IsKeyPressed(KEY_KP_1)) estado = TELA_SELECAO;
+            if (IsKeyPressed(KEY_TWO)  || IsKeyPressed(KEY_KP_2)) estado = TELA_RANKING;
+            if (IsKeyPressed(KEY_THREE)|| IsKeyPressed(KEY_KP_3)) estado = TELA_INSTRUCOES;
+            if (IsKeyPressed(KEY_ZERO) || IsKeyPressed(KEY_KP_0)) goto sair;
             for (int i = 0; i < NUM_BOTOES_MENU; i++) {
                 if (CheckCollisionPointRec(mouse, botoes_menu[i].rect) &&
                     IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (i == 0) estado = TELA_SELECAO;
+                    if (i == 1) estado = TELA_RANKING;
                     if (i == 2) estado = TELA_INSTRUCOES;
                     if (i == NUM_BOTOES_MENU - 1) goto sair;
                 }
             }
-            break;
-
-        case TELA_INSTRUCOES:
-            if (IsKeyPressed(KEY_ESCAPE)) estado = TELA_MENU;
             break;
 
         /* ---- SELECAO ---- */
@@ -317,6 +315,23 @@ int main(void)
                     ranking_ordenar(&ranking);
                     estado          = TELA_RESULTADO;
                     turno_terminado = 0;
+
+                    /* Salva o vencedor no arquivo de recordes */
+                    {
+                        time_t t = time(NULL);
+                        struct tm *tm_info = localtime(&t);
+                        char data_str[32];
+                        strftime(data_str, sizeof(data_str), "%d/%m/%Y %H:%M", tm_info);
+                        FILE *f = fopen("ranking.txt", "a");
+                        if (f) {
+                            fprintf(f, "%s;%d;%d;%s\n",
+                                    ranking.entradas[0].nome,
+                                    ranking.entradas[0].pontos_total,
+                                    ranking.entradas[0].moedas,
+                                    data_str);
+                            fclose(f);
+                        }
+                    }
                     break;
                 }
                 jogador_atual   = (jogador_atual + 1) % NUM_JOGADORES;
@@ -474,6 +489,14 @@ int main(void)
             if (IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
             break;
 
+        case TELA_RANKING:
+            if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
+            break;
+
+        case TELA_INSTRUCOES:
+            if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER)) estado = TELA_MENU;
+            break;
+
         } /* fim switch update */
 
         /* ==================================================================
@@ -568,17 +591,23 @@ int main(void)
                         turno_terminado = 1;
                     }
                 } else {
-                    /* Aluguel */
+                    /* Aluguel — se não tiver moedas entra em venda forçada */
                     if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                         int aluguel = anim.casa_ativa->custo / 2;
-                        J_ATUAL->moedas -= aluguel;
-                        if (J_ATUAL->moedas < 0) J_ATUAL->moedas = 0;
-                        int dono = anim.casa_ativa->proprietario;
-                        if (dono >= 0 && dono < NUM_JOGADORES)
-                            jogadores[dono].moedas += aluguel;
-                        anim.casa_ativa = NULL;
-                        anim.estado     = TURNO_AGUARDANDO;
-                        turno_terminado = 1;
+                        if (J_ATUAL->moedas < aluguel) {
+                            /* Não tem saldo: abre overlay de venda */
+                            anim.venda_divida      = aluguel;
+                            anim.venda_selecionada = 0;
+                            anim.estado            = TURNO_VENDENDO_PROPRIEDADE;
+                        } else {
+                            J_ATUAL->moedas -= aluguel;
+                            int dono = anim.casa_ativa->proprietario;
+                            if (dono >= 0 && dono < NUM_JOGADORES)
+                                jogadores[dono].moedas += aluguel;
+                            anim.casa_ativa = NULL;
+                            anim.estado     = TURNO_AGUARDANDO;
+                            turno_terminado = 1;
+                        }
                     }
                 }
             } else {
@@ -597,6 +626,9 @@ int main(void)
                         }
                     } else {
                         int aluguel = anim.casa_ativa->custo / 2;
+                        if (!IS_BOT && J_ATUAL->moedas < aluguel) {
+                            /* Bot sem moedas: paga o que tem */
+                        }
                         J_ATUAL->moedas -= aluguel;
                         if (J_ATUAL->moedas < 0) J_ATUAL->moedas = 0;
                         int dono = anim.casa_ativa->proprietario;
@@ -645,6 +677,76 @@ int main(void)
                     J_ATUAL->cartas_acao[anim.acao_slot] = -1;
                     anim.estado = TURNO_AGUARDANDO;
                 }
+            }
+        }
+
+        /* Venda forçada de propriedade */
+        if (anim.estado == TURNO_VENDENDO_PROPRIEDADE) {
+            /* Coleta propriedades do jogador atual */
+            Casa *props[24];
+            int   n_props = 0;
+            Casa *c_iter = tabuleiro->cabeca;
+            do {
+                if (c_iter->tipo == CASA_PROPRIEDADE &&
+                    c_iter->proprietario == jogador_atual)
+                    props[n_props++] = c_iter;
+                c_iter = c_iter->next;
+            } while (c_iter != tabuleiro->cabeca);
+
+            int falta = anim.venda_divida - J_ATUAL->moedas;
+
+            /* Clique em uma linha da lista */
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                const int PW = 620, PH = 520;
+                const int PX = (1280 - PW) / 2;
+                const int PY = (720  - PH) / 2;
+                int row_y = PY + 68 + 22 + 28 + 10 + 10 + 20; /* mesmo cálculo do render */
+                for (int i = 0; i < n_props && row_y + 44 < PY + PH - 60; i++) {
+                    Rectangle row = {(float)(PX+20), (float)row_y, (float)(PW-40), 38.0f};
+                    if (CheckCollisionPointRec(mouse, row)) {
+                        /* Vende: devolve metade do custo e remove propriedade */
+                        int revenda = props[i]->custo / 2;
+                        J_ATUAL->moedas += revenda;
+                        /* Desconta os pontos que a propriedade gerou */
+                        J_ATUAL->pontos[props[i]->setor] -= props[i]->pontos;
+                        if (J_ATUAL->pontos[props[i]->setor] < 0)
+                            J_ATUAL->pontos[props[i]->setor] = 0;
+                        props[i]->proprietario = -1; /* libera a propriedade */
+                        anim.venda_selecionada = 0;
+                        break;
+                    }
+                    row_y += 44;
+                }
+            }
+
+            /* Confirma pagamento quando tiver saldo suficiente */
+            if ((IsKeyPressed(KEY_ENTER)) && falta <= 0) {
+                int aluguel = anim.venda_divida;
+                J_ATUAL->moedas -= aluguel;
+                if (J_ATUAL->moedas < 0) J_ATUAL->moedas = 0;
+                /* Paga ao dono se for aluguel */
+                if (anim.casa_ativa && anim.eh_aluguel) {
+                    int dono = anim.casa_ativa->proprietario;
+                    if (dono >= 0 && dono < NUM_JOGADORES)
+                        jogadores[dono].moedas += aluguel;
+                }
+                anim.casa_ativa = NULL;
+                anim.estado     = TURNO_AGUARDANDO;
+                turno_terminado = 1;
+            }
+
+            /* ESC: paga o que tem e continua (sem moedas negativas) */
+            if (IsKeyPressed(KEY_ESCAPE)) {
+                int pode_pagar = J_ATUAL->moedas;
+                if (anim.casa_ativa && anim.eh_aluguel) {
+                    int dono = anim.casa_ativa->proprietario;
+                    if (dono >= 0 && dono < NUM_JOGADORES)
+                        jogadores[dono].moedas += pode_pagar;
+                }
+                J_ATUAL->moedas = 0;
+                anim.casa_ativa = NULL;
+                anim.estado     = TURNO_AGUARDANDO;
+                turno_terminado = 1;
             }
         }
 
@@ -859,117 +961,7 @@ int main(void)
             render_propriedade_overlay(&anim, J_ATUAL);
             render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
             render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
-            break;
-        }
-
-        /* ---- INSTRUCOES ---- */
-        case TELA_INSTRUCOES: {
-            DrawLineEx((Vector2){100, 80},  (Vector2){100, 650}, 2, COR_LINHA);
-            DrawLineEx((Vector2){1180, 80}, (Vector2){1180, 650}, 2, COR_LINHA);
-
-            int tw = MeasureText("INSTRUCOES", 44);
-            DrawText("INSTRUCOES", LARGURA/2 - tw/2, 30, 44, COR_TITULO);
-            DrawLineEx((Vector2){300, 88}, (Vector2){980, 88}, 1, COR_LINHA);
-
-            /* --- Coluna esquerda --- */
-            int lx = 130, rx = 680;
-            int y = 108;
-
-            /* OBJETIVO */
-            DrawText("OBJETIVO", lx, y, 16, COR_TITULO);
-            y += 24;
-            DrawLine(lx, y, lx + 490, y, (Color){255,140,30,60});
-            y += 10;
-            DrawText("Acumule 20 pontos em cada setor para vencer:", lx, y, 14, COR_SUBTITULO);
-            y += 22;
-
-            DrawCircle(lx + 8,  y + 7, 6, (Color){30,144,255,220});
-            DrawText("Tecnologia", lx + 20, y, 14, (Color){30,144,255,255});
-            DrawCircle(lx + 138, y + 7, 6, (Color){60,179,113,220});
-            DrawText("Turismo",    lx + 150, y, 14, (Color){60,179,113,255});
-            DrawCircle(lx + 248, y + 7, 6, (Color){255,165,0,220});
-            DrawText("Comercio",   lx + 260, y, 14, (Color){255,165,0,255});
-            y += 30;
-
-            DrawText("Passe pelo Marco Zero para ganhar +100 moedas.", lx, y, 13, (Color){180,210,255,180});
-            y += 36;
-
-            /* CONTROLES */
-            DrawText("CONTROLES", lx, y, 16, COR_TITULO);
-            y += 24;
-            DrawLine(lx, y, lx + 490, y, (Color){255,140,30,60});
-            y += 10;
-
-            struct { const char *tecla; const char *desc; } controles[] = {
-                { "[ESPACO]",   "Rolar o dado / confirmar acao"    },
-                { "[C]",        "Comprar propriedade"              },
-                { "[X]",        "Passar sem comprar"               },
-                { "[ENTER]",    "Confirmar / fechar carta"         },
-                { "[1]–[4]",    "Ver status de cada jogador no HUD"},
-                { "[ESC]",      "Cancelar / desfazer selecao"      },
-            };
-            for (int i = 0; i < 6; i++) {
-                int kw = MeasureText(controles[i].tecla, 14);
-                DrawRectangle(lx, y, kw + 10, 20, (Color){20,50,90,255});
-                DrawText(controles[i].tecla, lx + 5, y + 3, 14, (Color){255,215,0,255});
-                DrawText(controles[i].desc,  lx + kw + 18, y + 3, 13, COR_SUBTITULO);
-                y += 26;
-            }
-
-            /* --- Coluna direita --- */
-            y = 108;
-
-            DrawText("TIPOS DE CASA", rx, y, 16, COR_TITULO);
-            y += 24;
-            DrawLine(rx, y, rx + 470, y, (Color){255,140,30,60});
-            y += 10;
-
-            struct { Color cor; const char *nome; const char *desc; } casas[] = {
-                { (Color){255,215,0,220},   "Marco Zero",  "Ponto de partida. +100 moedas ao passar." },
-                { (Color){30,144,255,220},  "Tecnologia",  "Compre e gere pontos de tecnologia."      },
-                { (Color){60,179,113,220},  "Turismo",     "Compre e gere pontos de turismo."         },
-                { (Color){255,165,0,220},   "Comercio",    "Compre e gere pontos de comercio."        },
-                { (Color){50,205,50,220},   "Sorte",       "Puxe uma carta de evento positivo."       },
-                { (Color){210,50,50,220},   "Azar",        "Puxe uma carta de evento negativo."       },
-                { (Color){160,100,220,220}, "Evento",      "Puxe uma carta que afeta todos."          },
-            };
-            for (int i = 0; i < 7; i++) {
-                DrawRectangle(rx, y + 2, 14, 14, casas[i].cor);
-                DrawText(casas[i].nome, rx + 20, y, 14, WHITE);
-                int nw = MeasureText(casas[i].nome, 14);
-                DrawText("—", rx + 20 + nw + 4, y, 13, (Color){100,120,160,200});
-                DrawText(casas[i].desc, rx + 20 + nw + 20, y, 13, (Color){180,210,255,180});
-                y += 24;
-            }
-
-            y += 10;
-
-            /* CARTAS DE ACAO */
-            DrawText("CARTAS DE ACAO", rx, y, 16, COR_TITULO);
-            y += 24;
-            DrawLine(rx, y, rx + 470, y, (Color){255,140,30,60});
-            y += 10;
-
-            const char *acoes[] = {
-                "Acao de Turismo   — Pontos extras por propriedades de turismo",
-                "Recife em Festa   — Dobra seus pontos por 2 turnos",
-                "Acao de Comercio  — Pontos extras por propriedades de comercio",
-                "Parceria          — Voce e um aliado ganham pontos em tudo",
-            };
-            for (int i = 0; i < 4; i++) {
-                DrawRectangle(rx, y + 3, 10, 10, COR_PINO[i]);
-                DrawText(acoes[i], rx + 18, y, 13, (Color){180,210,255,180});
-                y += 22;
-            }
-
-            y += 14;
-            DrawText("Clique na carta no rodape da tela para usa-la no seu turno.",
-                     rx, y, 13, (Color){130,150,190,200});
-
-            /* Rodapé */
-            DrawLineEx((Vector2){300, 650}, (Vector2){980, 650}, 1, COR_LINHA);
-            tw = MeasureText("[ESC]  Voltar ao menu", 16);
-            DrawText("[ESC]  Voltar ao menu", LARGURA/2 - tw/2, 660, 16, COR_SUBTITULO);
+            render_venda_overlay(&anim, J_ATUAL, tabuleiro, jogador_atual);
             break;
         }
 
@@ -1042,7 +1034,174 @@ int main(void)
             break;
         }
 
-        } /* fim switch draw */
+        /* ---- RANKING (menu) ---- */
+        case TELA_RANKING: {
+            DrawLineEx((Vector2){100,80},  (Vector2){100,650}, 2, COR_LINHA);
+            DrawLineEx((Vector2){1180,80}, (Vector2){1180,650},2, COR_LINHA);
+
+            int tw = MeasureText("RANKING", 48);
+            DrawText("RANKING", LARGURA/2 - tw/2, 80, 48, COR_TITULO);
+            DrawLineEx((Vector2){340,142}, (Vector2){940,142}, 1, COR_LINHA);
+
+            /* Tenta carregar arquivo de recordes */
+            FILE *f = fopen("ranking.txt", "r");
+            if (!f) {
+                const char *vazio = "Nenhuma partida registrada ainda.";
+                tw = MeasureText(vazio, 22);
+                DrawText(vazio, LARGURA/2 - tw/2, 340, 22,
+                         (Color){130, 150, 190, 200});
+                const char *hint2 = "Termine uma partida para registrar seu recorde!";
+                tw = MeasureText(hint2, 16);
+                DrawText(hint2, LARGURA/2 - tw/2, 380, 16,
+                         (Color){100, 120, 160, 180});
+            } else {
+                static const Color medalha_r[] = {
+                    {255, 215,   0, 255},
+                    {192, 192, 192, 255},
+                    {205, 127,  50, 255},
+                    {180, 210, 255, 200},
+                };
+                /* Cabeçalho da tabela */
+                DrawText("#",      230, 158, 16, COR_SUBTITULO);
+                DrawText("Nome",   290, 158, 16, COR_SUBTITULO);
+                DrawText("Pontos", 700, 158, 16, COR_SUBTITULO);
+                DrawText("Moedas", 870, 158, 16, COR_SUBTITULO);
+                DrawText("Data",   990, 158, 16, COR_SUBTITULO);
+                DrawLineEx((Vector2){210,180}, (Vector2){1070,180}, 1,
+                           (Color){255,140,30,80});
+
+                char linha[128];
+                int pos = 0;
+                int ry  = 192;
+                while (fgets(linha, sizeof(linha), f) && pos < 10) {
+                    char nome[MAX_NOME_JOGADOR];
+                    int  pts = 0, moedas = 0;
+                    char data[32] = "";
+                    /* formato: "Nome;pontos;moedas;data\n" */
+                    sscanf(linha, "%47[^;];%d;%d;%31[^\n]",
+                           nome, &pts, &moedas, data);
+
+                    Color c = (pos < 4) ? medalha_r[pos]
+                                        : (Color){180, 210, 255, 200};
+
+                    Color fundo_linha = (pos % 2 == 0)
+                        ? (Color){15, 28, 55, 180}
+                        : (Color){20, 38, 70, 160};
+
+                    DrawRectangleRounded(
+                        (Rectangle){210, ry, 860, 36}, 0.1f, 4, fundo_linha);
+                    DrawRectangleRoundedLines(
+                        (Rectangle){210, ry, 860, 36}, 0.1f, 4, (Color){255,140,30,40});
+
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "%d.", pos + 1);
+                    DrawText(buf,   230, ry + 9, 18, c);
+                    DrawText(nome,  290, ry + 9, 18, WHITE);
+
+                    char spts[16], smoe[16];
+                    snprintf(spts, sizeof(spts), "%d", pts);
+                    snprintf(smoe, sizeof(smoe), "%d", moedas);
+                    DrawText(spts,  700, ry + 9, 18, c);
+                    DrawText(smoe,  870, ry + 9, 18, c);
+                    if (data[0]) DrawText(data, 990, ry + 9, 14,
+                                         (Color){130,150,190,200});
+
+                    ry  += 42;
+                    pos++;
+                }
+                fclose(f);
+
+                if (pos == 0) {
+                    const char *vazio = "Arquivo encontrado, mas sem entradas.";
+                    tw = MeasureText(vazio, 18);
+                    DrawText(vazio, LARGURA/2 - tw/2, 340, 18,
+                             (Color){130, 150, 190, 200});
+                }
+            }
+
+            tw = MeasureText("[ESC] ou [ENTER] Voltar ao menu", 16);
+            DrawText("[ESC] ou [ENTER] Voltar ao menu",
+                     LARGURA/2 - tw/2, 640, 16, COR_SUBTITULO);
+            break;
+        }
+
+        /* ---- INSTRUCOES ---- */
+        case TELA_INSTRUCOES: {
+            DrawLineEx((Vector2){100,80},  (Vector2){100,660}, 2, COR_LINHA);
+            DrawLineEx((Vector2){1180,80}, (Vector2){1180,660},2, COR_LINHA);
+
+            int tw = MeasureText("INSTRUCOES", 48);
+            DrawText("INSTRUCOES", LARGURA/2 - tw/2, 80, 48, COR_TITULO);
+            DrawLineEx((Vector2){340,142}, (Vector2){940,142}, 1, COR_LINHA);
+
+            /* ---- Painel esquerdo ---- */
+            DrawRectangleRounded((Rectangle){120,160, 480,440}, 0.06f, 6,
+                                 (Color){15,25,50,200});
+            DrawRectangleRoundedLines((Rectangle){120,160, 480,440}, 0.06f, 6,
+                                      (Color){255,140,30,120});
+
+            DrawText("OBJETIVO",      148, 178, 20, COR_TITULO);
+            DrawText("Acumule pontos nos setores",  148, 208, 16, COR_SUBTITULO);
+            DrawText("Tecnologia, Turismo e",       148, 228, 16, COR_SUBTITULO);
+            DrawText("Comercio. O primeiro a",      148, 248, 16, COR_SUBTITULO);
+            DrawText("atingir a meta vence!",        148, 268, 16, COR_SUBTITULO);
+
+            DrawLineEx((Vector2){136,296}, (Vector2){584,296}, 1,
+                       (Color){255,140,30,60});
+
+            DrawText("TURNO",         148, 308, 20, COR_TITULO);
+            DrawText("[ESPACO]  Rolar o dado",      148, 336, 16, COR_SUBTITULO);
+            DrawText("Pino move automaticamente",   148, 356, 16, COR_SUBTITULO);
+            DrawText("Clique no deck para",         148, 376, 16, COR_SUBTITULO);
+            DrawText("puxar a carta sorteada",      148, 396, 16, COR_SUBTITULO);
+
+            DrawLineEx((Vector2){136,424}, (Vector2){584,424}, 1,
+                       (Color){255,140,30,60});
+
+            DrawText("CASAS",         148, 436, 20, COR_TITULO);
+            DrawText("Propriedade  ->  Comprar [C]",148, 464, 15, COR_SUBTITULO);
+            DrawText("                 ou Passar [X]",148,484, 15, COR_SUBTITULO);
+            DrawText("Sorte / Azar / Evento ->",    148, 504, 15, COR_SUBTITULO);
+            DrawText("   Clique no deck para puxar",148, 524, 15, COR_SUBTITULO);
+            DrawText("Marco Zero -> Bonus de moedas",148,548, 15, COR_SUBTITULO);
+            DrawText("Bloqueio   -> Perde um turno", 148,568, 15, COR_SUBTITULO);
+
+            /* ---- Painel direito ---- */
+            DrawRectangleRounded((Rectangle){640,160, 520,440}, 0.06f, 6,
+                                 (Color){15,25,50,200});
+            DrawRectangleRoundedLines((Rectangle){640,160, 520,440}, 0.06f, 6,
+                                      (Color){255,140,30,120});
+
+            DrawText("CARTAS DE ACAO",668, 178, 20, COR_TITULO);
+            DrawText("Voce pode ter ate 2 cartas.",  668, 208, 16, COR_SUBTITULO);
+            DrawText("Clique na carta para usar",    668, 228, 16, COR_SUBTITULO);
+            DrawText("antes de rolar o dado.",       668, 248, 16, COR_SUBTITULO);
+
+            DrawLineEx((Vector2){656,278}, (Vector2){1144,278}, 1,
+                       (Color){255,140,30,60});
+
+            DrawText("Carta 1  Impulso Financeiro",  668, 292, 15, (Color){255,215,0,255});
+            DrawText("  +20 moedas imediatamente",   668, 312, 14, COR_SUBTITULO);
+            DrawText("Carta 2  Parceria Estrategica",668, 340, 15, (Color){100,200,255,255});
+            DrawText("  Rouba moedas de outro jogador",668,360, 14, COR_SUBTITULO);
+            DrawText("Carta 3  Inovacao",            668, 388, 15, (Color){100,255,180,255});
+            DrawText("  Dobra pontos na proxima casa",668,408, 14, COR_SUBTITULO);
+            DrawText("Carta 4  Greve Geral",         668, 436, 15, (Color){255,100,100,255});
+            DrawText("  Bloqueia todos por 1 turno", 668, 456, 14, COR_SUBTITULO);
+
+            DrawLineEx((Vector2){656,488}, (Vector2){1144,488}, 1,
+                       (Color){255,140,30,60});
+
+            DrawText("CONTROLES",    668, 500, 20, COR_TITULO);
+            DrawText("[1]-[4]  Inspecionar jogador", 668, 528, 15, COR_SUBTITULO);
+            DrawText("[ESC]    Fechar inspecao",      668, 548, 15, COR_SUBTITULO);
+            DrawText("[ENTER]  Confirmar acoes",      668, 568, 15, COR_SUBTITULO);
+
+            tw = MeasureText("[ESC] ou [ENTER] Voltar ao menu", 16);
+            DrawText("[ESC] ou [ENTER] Voltar ao menu",
+                     LARGURA/2 - tw/2, 642, 16, COR_SUBTITULO);
+            break;
+        }
 
         EndDrawing();
     }

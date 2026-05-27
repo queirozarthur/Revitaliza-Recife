@@ -19,7 +19,8 @@ typedef enum {
     TURNO_ANIMANDO_COMPRA_CARTA,  /* Carta subindo do deck para o centro    */
     TURNO_MOSTRANDO_CARTA,        /* carta puxada, aguardando fechar        */
     TURNO_MOSTRANDO_PROPRIEDADE,  /* propriedade — comprar ou pagar aluguel */
-    TURNO_USANDO_ACAO             /* janela de confirmação de uso de carta de ação */
+    TURNO_USANDO_ACAO,            /* janela de confirmação de uso de carta de ação */
+    TURNO_VENDENDO_PROPRIEDADE    /* jogador sem moedas precisa vender para pagar  */
 } EstadoTurno;
 
 typedef struct {
@@ -52,6 +53,11 @@ typedef struct {
     /* propriedade sob análise (válido em TURNO_MOSTRANDO_PROPRIEDADE) */
     Casa *casa_ativa;
     int   eh_aluguel;   /* 0 = compra livre, 1 = aluguel forçado */
+
+    /* venda forçada (válido em TURNO_VENDENDO_PROPRIEDADE) */
+    int   venda_divida;       /* quanto o jogador precisa pagar no total     */
+    int   venda_scroll;       /* offset de scroll da lista (futuro uso)      */
+    int   venda_selecionada;  /* índice da propriedade destacada pelo cursor */
 } AnimacaoTurno;
 
 /* ------------------------------------------------------------------ */
@@ -90,6 +96,8 @@ void render_dado(const AnimacaoTurno *anim);
 void render_carta_overlay(const AnimacaoTurno *anim);
 
 void render_propriedade_overlay(const AnimacaoTurno *anim, const Jogador *jogador);
+void render_venda_overlay(const AnimacaoTurno *anim, const Jogador *jogador,
+                          const Tabuleiro *tab, int jogador_idx);
 void render_hud_cartas_acao(Jogador *j, AnimacaoTurno *anim, Font fonte);
 void render_acao_overlay(Jogador *jogadores, int num_jogadores, int jogador_atual, AnimacaoTurno *anim, Font fonte);
 void render_confetti(int active);
