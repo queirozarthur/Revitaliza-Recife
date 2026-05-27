@@ -12,22 +12,13 @@ typedef enum {
     TURNO_AGUARDANDO,
     TURNO_DADO_GIRANDO,
     TURNO_PINO_MOVENDO,
-<<<<<<< HEAD
-    TURNO_ESPERANDO_COMPRA_CARTA, 
-    TURNO_ANIMANDO_COMPRA_CARTA,  
-    TURNO_MOSTRANDO_CARTA,        
-    TURNO_MOSTRANDO_PROPRIEDADE,  
-    TURNO_USANDO_ACAO,            
-    TURNO_VENDENDO_PROPRIEDADE    
-=======
-    TURNO_ESPERANDO_COMPRA_CARTA, /* Aguarda clique no deck correspondente  */
-    TURNO_ANIMANDO_COMPRA_CARTA,  /* Carta subindo do deck para o centro    */
-    TURNO_MOSTRANDO_CARTA,        /* carta puxada, aguardando fechar        */
-    TURNO_MOSTRANDO_PROPRIEDADE,  /* propriedade — comprar ou pagar aluguel */
-    TURNO_USANDO_ACAO,            /* janela de confirmação de uso de carta de ação */
-    TURNO_VENDENDO_PROPRIEDADE,   /* jogador sem moedas precisa vender para pagar  */
-    TURNO_MENSAGEM_VEZ            /* exibição da mensagem de quem é a vez          */
->>>>>>> ad25ce8e79a891aa81d2dc509751a3447e27b255
+    TURNO_ESPERANDO_COMPRA_CARTA,
+    TURNO_ANIMANDO_COMPRA_CARTA,
+    TURNO_MOSTRANDO_CARTA,
+    TURNO_MOSTRANDO_PROPRIEDADE,
+    TURNO_USANDO_ACAO,
+    TURNO_VENDENDO_PROPRIEDADE,
+    TURNO_MENSAGEM_VEZ
 } EstadoTurno;
 
 typedef struct {

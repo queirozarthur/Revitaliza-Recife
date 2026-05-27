@@ -460,11 +460,13 @@ void render_dado_simples(int face, int cx, int cy, int raio, int jitter_x, int j
 void render_dado(const AnimacaoTurno *anim)
 {
     if (!anim || anim->estado == TURNO_AGUARDANDO) return;
-    if (anim->estado == TURNO_ESPERANDO_COMPRA_CARTA || 
+    if (anim->estado == TURNO_ESPERANDO_COMPRA_CARTA ||
         anim->estado == TURNO_ANIMANDO_COMPRA_CARTA ||
         anim->estado == TURNO_MOSTRANDO_CARTA ||
         anim->estado == TURNO_MOSTRANDO_PROPRIEDADE ||
-        anim->estado == TURNO_USANDO_ACAO) return;
+        anim->estado == TURNO_USANDO_ACAO ||
+        anim->estado == TURNO_VENDENDO_PROPRIEDADE ||
+        anim->estado == TURNO_MENSAGEM_VEZ) return;
 
     const int CX   = BX + CS + (5*SW) / 2;
     const int CY   = BY + CS + (5*SH) / 2;
