@@ -269,6 +269,109 @@ void render_tabuleiro(const Tabuleiro *tab,
     if (jogadores && jogadores[jogador_atual].posicao) {
         desenhar_pino(cur_px, cur_py, jogador_atual, &jogadores[jogador_atual], 13, 1);
     }
+
+    /* --- Hover visual das casas --- */
+    if (!anim || (anim->estado == TURNO_AGUARDANDO || anim->estado == TURNO_MENSAGEM_VEZ)) {
+        Vector2 mouse_pos = GetMousePosition();
+        const Casa *hover_casa = NULL;
+        {
+            Casa *hov = tab->cabeca;
+            do {
+                Rectangle r = render_casa_rect(hov->id);
+                if (CheckCollisionPointRec(mouse_pos, r)) {
+                    hover_casa = hov;
+                    break;
+                }
+                hov = hov->next;
+            } while (hov != tab->cabeca);
+        }
+
+        if (hover_casa) {
+            Rectangle r = render_casa_rect(hover_casa->id);
+
+            float pulse = 0.65f + 0.35f * sinf(GetTime() * 6.0f);
+            Color brilho = {255, 255, 255, (unsigned char)(200 * pulse)};
+            Color overlay = {255, 255, 255, (unsigned char)(30 * pulse)};
+            DrawRectangle((int)r.x, (int)r.y, (int)r.width, (int)r.height, overlay);
+            DrawRectangleLinesEx((Rectangle){r.x - 2, r.y - 2, r.width + 4, r.height + 4}, 3, brilho);
+
+            /* --- Tooltip --- */
+            const int TW = 210, PADDING = 10;
+            int n_linhas = 2;
+            if (hover_casa->tipo == CASA_PROPRIEDADE) n_linhas = 5;
+            int TH = PADDING * 2 + n_linhas * 18 + (n_linhas - 1) * 4 + 10;
+
+            float tx = mouse_pos.x + 14;
+            float ty = mouse_pos.y + 14;
+            if (tx + TW > 950) tx = mouse_pos.x - TW - 10;
+            if (ty + TH > 715) ty = mouse_pos.y - TH - 10;
+
+            DrawRectangleRounded((Rectangle){tx + 3, ty + 3, TW, TH}, 0.12f, 6,
+                                 (Color){0, 0, 0, 100});
+            DrawRectangleRounded((Rectangle){tx, ty, TW, TH}, 0.12f, 6,
+                                 (Color){10, 22, 50, 240});
+
+            Color cor_borda_tip;
+            if      (hover_casa->tipo == CASA_SORTE)       cor_borda_tip = COR_SOR;
+            else if (hover_casa->tipo == CASA_AZAR)        cor_borda_tip = COR_AZA;
+            else if (hover_casa->tipo == CASA_EVENTO)      cor_borda_tip = COR_EVT;
+            else if (hover_casa->tipo == CASA_INICIO)      cor_borda_tip = COR_INI;
+            else {
+                switch (hover_casa->setor) {
+                    case SETOR_TECNOLOGIA: cor_borda_tip = COR_TEC; break;
+                    case SETOR_TURISMO:    cor_borda_tip = COR_TUR; break;
+                    case SETOR_COMERCIO:   cor_borda_tip = COR_COM; break;
+                    default:               cor_borda_tip = COR_PROP; break;
+                }
+            }
+            DrawRectangleRoundedLines((Rectangle){tx, ty, TW, TH}, 0.12f, 6, cor_borda_tip);
+
+            int lx = (int)tx + PADDING;
+            int ly = (int)ty + PADDING;
+
+            DrawText(hover_casa->nome, lx, ly, 14, WHITE);
+            ly += 22;
+
+            const char *tipo_label;
+            switch (hover_casa->tipo) {
+                case CASA_INICIO:      tipo_label = "Marco Zero";   break;
+                case CASA_PROPRIEDADE: tipo_label = "Propriedade";  break;
+                case CASA_SORTE:       tipo_label = "Sorte";        break;
+                case CASA_AZAR:        tipo_label = "Azar";         break;
+                case CASA_EVENTO:      tipo_label = "Evento";       break;
+                default:               tipo_label = "Casa";         break;
+            }
+            DrawText(tipo_label, lx, ly, 12, cor_borda_tip);
+            ly += 20;
+
+            if (hover_casa->tipo == CASA_PROPRIEDADE) {
+                const char *setor_str;
+                switch (hover_casa->setor) {
+                    case SETOR_TECNOLOGIA: setor_str = "Tecnologia"; break;
+                    case SETOR_TURISMO:    setor_str = "Turismo";    break;
+                    case SETOR_COMERCIO:   setor_str = "Comercio";   break;
+                    default:               setor_str = "Neutro";     break;
+                }
+                DrawText(setor_str, lx, ly, 12, cor_borda_tip);
+                ly += 18;
+
+                char buf_tip[48];
+                snprintf(buf_tip, sizeof(buf_tip), "Custo: %d  |  +%d pts",
+                         hover_casa->custo, hover_casa->pontos);
+                DrawText(buf_tip, lx, ly, 12, (Color){180, 210, 255, 220});
+                ly += 18;
+
+                if (hover_casa->proprietario >= 0 && hover_casa->proprietario < num_jogadores) {
+                    char dono_str[48];
+                    snprintf(dono_str, sizeof(dono_str), "Dono: %s",
+                             jogadores[hover_casa->proprietario].nome);
+                    DrawText(dono_str, lx, ly, 12, COR_PINO[hover_casa->proprietario]);
+                } else {
+                    DrawText("Livre para comprar", lx, ly, 12, (Color){80, 220, 80, 220});
+                }
+            }
+        }
+    }
 }
 
 static void barra_progresso(int x, int y, int w, int h, float ratio, Color cor)
