@@ -1202,6 +1202,7 @@ int main(void)
                      LARGURA/2 - tw/2, 642, 16, COR_SUBTITULO);
             break;
         }
+        }
 
         EndDrawing();
     }

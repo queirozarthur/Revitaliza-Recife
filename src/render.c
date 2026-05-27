@@ -1086,6 +1086,7 @@ void render_venda_overlay(const AnimacaoTurno *anim, const Jogador *jogador,
     }
 }
 
+#define NUM_CONFETTI 150
 
 typedef struct {
     Vector2 pos;
