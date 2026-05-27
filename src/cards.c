@@ -10,15 +10,15 @@
 static const Carta SORTE_DADOS[] = {
     { 100, "Patrocínio Cultural",
       "Uma empresa patrocina eventos culturais no Recife Antigo.",
-      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_TURISMO,    2 },
+      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_TURISMO,    3 },
 
     { 101, "Hackathon no Porto",
       "Hackathon no Porto Digital gera soluções inovadoras.",
-      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_TECNOLOGIA, 2 },
+      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_TECNOLOGIA, 3 },
 
     { 102, "Feira de Negócios",
       "Feira movimenta o comércio local do Bairro do Recife.",
-      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_COMERCIO,   2 },
+      CARTA_SORTE, EFEITO_GANHAR_PONTOS, SETOR_COMERCIO,   3 },
 
     { 103, "Investidor Anjo",
       "Um investidor acredita no seu projeto. Ganhe 80 moedas.",

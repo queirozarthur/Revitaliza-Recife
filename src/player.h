@@ -4,7 +4,7 @@
 #include "board.h"
 
 #define MAX_NOME_JOGADOR  32
-#define MOEDAS_INICIAIS  300
+#define MOEDAS_INICIAIS  150
 #define BONUS_MARCO_ZERO 100
 #define META_PONTOS       20   /* pontos por setor para vencer */
 
