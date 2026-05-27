@@ -6,7 +6,7 @@
 #include "player.h"
 #include "cards.h"
 
-#define DURACAO_PASSO 0.28f
+#define DURACAO_PASSO 0.45f
 
 /* ------------------------------------------------------------------ */
 /* Estado da animação de turno                                          */
@@ -20,11 +20,14 @@ typedef enum {
     TURNO_MOSTRANDO_CARTA,        /* carta puxada, aguardando fechar        */
     TURNO_MOSTRANDO_PROPRIEDADE,  /* propriedade — comprar ou pagar aluguel */
     TURNO_USANDO_ACAO,            /* janela de confirmação de uso de carta de ação */
-    TURNO_VENDENDO_PROPRIEDADE    /* jogador sem moedas precisa vender para pagar  */
+    TURNO_VENDENDO_PROPRIEDADE,   /* jogador sem moedas precisa vender para pagar  */
+    TURNO_MENSAGEM_VEZ            /* exibição da mensagem de quem é a vez          */
 } EstadoTurno;
 
 typedef struct {
     EstadoTurno   estado;
+    
+    float timer_mensagem_vez;
 
     /* dado */
     int   resultado;

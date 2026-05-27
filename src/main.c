@@ -48,8 +48,8 @@ static void setup_passo(AnimacaoTurno *anim, const Jogador *jogador)
 
 static void iniciar_dado(AnimacaoTurno *anim, int *ultimo_dado)
 {
-    anim->resultado        = rand() % 6 + 1;
-    anim->face_atual       = rand() % 6 + 1;
+    anim->resultado        = GetRandomValue(1, 6);
+    anim->face_atual       = GetRandomValue(1, 6);
     anim->timer_dado       = 0.0f;
     anim->proximo_flash    = 0.0f;
     anim->passos_restantes = anim->resultado;
@@ -68,6 +68,12 @@ int main(void)
     InitWindow(LARGURA, ALTURA, "Revitaliza Recife — Porto Digital");
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);
+    
+    /* Warm up PRNG to avoid repeating early values */
+    for (int i = 0; i < 100; i++) {
+        GetRandomValue(0, 100);
+        rand();
+    }
 
     Tabuleiro     *tabuleiro     = NULL;
     SistemaCartas *cartas        = NULL;
@@ -105,6 +111,8 @@ int main(void)
     int ordem_rolagem_atual = 0;
     float ordem_timer_dado = 0.0f;
     int ordem_resultados[NUM_JOGADORES] = {0};
+    int ordem_desempate[NUM_JOGADORES] = {0};
+    int estado_desempate = 0;
 
     /* Botões do menu principal */
 #define NUM_BOTOES_MENU 4
@@ -218,6 +226,13 @@ int main(void)
 
                         ordem_rolagem_atual = 0;
                         ordem_timer_dado = 0.0f;
+                        estado_desempate = 0;
+                        for (int i=0; i<NUM_JOGADORES; i++) {
+                            ordem_desempate[i] = 1; // 1 means needs to roll
+                            ordem_resultados[i] = 0;
+                        }
+                        anim = (AnimacaoTurno){0};
+                        anim.estado = TURNO_DADO_GIRANDO;
                         estado = TELA_ORDEM;
                     }
                 }
@@ -228,35 +243,80 @@ int main(void)
         /* ---- ORDEM ---- */
         case TELA_ORDEM: {
             if (ordem_rolagem_atual < NUM_JOGADORES) {
-                ordem_timer_dado += dt;
-                anim.estado = TURNO_DADO_GIRANDO;
-                anim.timer_dado = ordem_timer_dado;
-                anim.proximo_flash -= dt;
+                if (ordem_desempate[ordem_rolagem_atual] == 0) {
+                    ordem_rolagem_atual++;
+                    break; // Skip this player this frame
+                }
 
-                if (anim.proximo_flash <= 0.0f) {
-                    anim.face_atual = rand() % 6 + 1;
-                    anim.proximo_flash = 0.08f;
-                    if (ordem_timer_dado < 0.8f) {
-                        anim.jitter_x = (rand() % 21) - 10;
-                        anim.jitter_y = (rand() % 21) - 10;
-                    } else {
-                        anim.jitter_x = (rand() % 5) - 2;
-                        anim.jitter_y = (rand() % 5) - 2;
+                ordem_timer_dado += dt;
+                
+                if (anim.estado == TURNO_AGUARDANDO) {
+                    if (ordem_timer_dado > 1.5f) { // Pausa para ver o dado antes de ir pro próximo
+                        ordem_rolagem_atual++;
+                        ordem_timer_dado = 0.0f;
+                        anim.estado = TURNO_DADO_GIRANDO;
+                    }
+                } else {
+                    anim.estado = TURNO_DADO_GIRANDO;
+                    anim.timer_dado = ordem_timer_dado;
+                    anim.proximo_flash -= dt;
+
+                    if (anim.proximo_flash <= 0.0f) {
+                        anim.face_atual = GetRandomValue(1, 6);
+                        anim.proximo_flash = 0.08f;
+                        if (ordem_timer_dado < 1.5f) {
+                            anim.jitter_x = GetRandomValue(-10, 10);
+                            anim.jitter_y = GetRandomValue(-10, 10);
+                        } else {
+                            anim.jitter_x = GetRandomValue(-2, 2);
+                            anim.jitter_y = GetRandomValue(-2, 2);
+                        }
+                    }
+                    
+                    if (ordem_timer_dado > 2.5f) { // Após 2.5s rolando
+                        int val = GetRandomValue(1, 6);
+                        ordem_resultados[ordem_rolagem_atual] += val;
+                        
+                        anim.face_atual = val;
+                        anim.estado = TURNO_AGUARDANDO;
+                        anim.jitter_x = 0;
+                        anim.jitter_y = 0;
+                        ordem_timer_dado = 0.0f;
                     }
                 }
-                
-                if (ordem_timer_dado > 1.2f) { // Após 1.2s rolando
-                    ordem_resultados[ordem_rolagem_atual] = rand() % 6 + 1;
-                    anim.face_atual = ordem_resultados[ordem_rolagem_atual];
-                    anim.estado = TURNO_AGUARDANDO;
-                    anim.jitter_x = 0;
-                    anim.jitter_y = 0;
-                    ordem_rolagem_atual++;
-                    ordem_timer_dado = 0.0f;
-                }
             } else {
-                ordem_timer_dado += dt;
-                anim.estado = TURNO_AGUARDANDO;
+                if (estado_desempate == 0 || estado_desempate == 1) {
+                    int tem_empate = 0;
+                    int proximo_desempate[NUM_JOGADORES] = {0};
+                    
+                    for (int i=0; i<NUM_JOGADORES; i++) {
+                        if (ordem_desempate[i] == 0 && estado_desempate == 1) continue;
+                        
+                        int contagem = 0;
+                        for (int j=0; j<NUM_JOGADORES; j++) {
+                            if (ordem_resultados[i] == ordem_resultados[j]) contagem++;
+                        }
+                        if (contagem > 1) {
+                            proximo_desempate[i] = 1;
+                            tem_empate = 1;
+                        }
+                    }
+                    
+                    if (tem_empate) {
+                        estado_desempate = 1;
+                        ordem_rolagem_atual = 0;
+                        for (int i=0; i<NUM_JOGADORES; i++) {
+                            ordem_desempate[i] = proximo_desempate[i];
+                        }
+                        anim.estado = TURNO_DADO_GIRANDO;
+                        ordem_timer_dado = 0.0f;
+                    } else {
+                        estado_desempate = 2; // Pronto pra ir
+                        ordem_timer_dado = 0.0f;
+                    }
+                } else if (estado_desempate == 2) {
+                    ordem_timer_dado += dt;
+                    anim.estado = TURNO_AGUARDANDO;
                 if (ordem_timer_dado > 3.0f || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { // Espera mostrar o resultado
                     /* Ordena os jogadores baseado no dado rolado (Insertion Sort para O(N^2) mas como N=4 é constante) */
                     for (int i = 1; i < NUM_JOGADORES; i++) {
@@ -275,15 +335,16 @@ int main(void)
 
                     jogador_atual   = 0;
                     hud_jogador_focado = -1;
-                    bot_delay       = -1.0f;
                     turno_terminado = 0;
                     anim            = (AnimacaoTurno){0};
-                    anim.estado     = TURNO_AGUARDANDO;
+                    anim.estado     = TURNO_MENSAGEM_VEZ;
+                    anim.timer_mensagem_vez = 2.0f;
                     anim.face_atual = 1;
                     ultimo_dado     = 0;
                     estado          = TELA_JOGO;
                 }
-            }
+            } // fecha else if (estado_desempate == 2)
+            } // fecha else (de if ordem_rolagem_atual < NUM_JOGADORES)
             break;
         }
 
@@ -340,6 +401,16 @@ int main(void)
                 }
                 bot_delay       = -1.0f;
                 turno_terminado = 0;
+                anim.estado = TURNO_MENSAGEM_VEZ;
+                anim.timer_mensagem_vez = 2.0f;
+            }
+            
+            /* 1.5 TURNO_MENSAGEM_VEZ */
+            if (anim.estado == TURNO_MENSAGEM_VEZ) {
+                anim.timer_mensagem_vez -= dt;
+                if (anim.timer_mensagem_vez <= 0.0f) {
+                    anim.estado = TURNO_AGUARDANDO;
+                }
             }
 
             /* 2. TURNO_AGUARDANDO */
@@ -405,23 +476,23 @@ int main(void)
                 anim.proximo_flash -= dt;
 
                 if (anim.proximo_flash <= 0.0f) {
-                    anim.face_atual = rand() % 6 + 1;
-                    if (anim.timer_dado < 0.8f) {
+                    anim.face_atual = GetRandomValue(1, 6);
+                    if (anim.timer_dado < 1.2f) {
                         anim.proximo_flash = 0.06f;
-                        anim.jitter_x = (rand() % 21) - 10;
-                        anim.jitter_y = (rand() % 21) - 10;
-                    } else if (anim.timer_dado < 1.4f) {
+                        anim.jitter_x = GetRandomValue(-10, 10);
+                        anim.jitter_y = GetRandomValue(-10, 10);
+                    } else if (anim.timer_dado < 2.2f) {
                         anim.proximo_flash = 0.13f;
-                        anim.jitter_x = (rand() % 13) - 6;
-                        anim.jitter_y = (rand() % 13) - 6;
+                        anim.jitter_x = GetRandomValue(-6, 6);
+                        anim.jitter_y = GetRandomValue(-6, 6);
                     } else {
                         anim.proximo_flash = 0.30f;
-                        anim.jitter_x = (rand() % 5) - 2;
-                        anim.jitter_y = (rand() % 5) - 2;
+                        anim.jitter_x = GetRandomValue(-2, 2);
+                        anim.jitter_y = GetRandomValue(-2, 2);
                     }
                 }
 
-                if (anim.timer_dado >= 1.8f) {
+                if (anim.timer_dado >= 2.8f) {
                     anim.face_atual = anim.resultado;
                     anim.jitter_x   = 0;
                     anim.jitter_y   = 0;
@@ -540,7 +611,7 @@ int main(void)
         
         /* Animação da carta subindo do deck */
         if (anim.estado == TURNO_ANIMANDO_COMPRA_CARTA) {
-            anim.timer_carta += dt / 0.5f; /* 0.5 segundos de animação */
+            anim.timer_carta += dt / 1.0f; /* 1.0 segundo de animação */
             if (anim.timer_carta >= 1.0f) {
                 anim.timer_carta = 1.0f;
                 anim.estado = TURNO_MOSTRANDO_CARTA;
@@ -866,6 +937,25 @@ int main(void)
                                       SEL_BW, SEL_BH };
                     if (!avatar_disponivel[k]) {
                         DrawRectangleRec(br, (Color){30, 30, 30, 200});
+                        if (texturas_avatar[k].id != 0) {
+                            Rectangle src = {0, 0, (float)texturas_avatar[k].width, (float)texturas_avatar[k].height};
+                            Rectangle dst = {br.x + br.width/2 - 25, br.y + 10, 50, 50};
+                            DrawTexturePro(texturas_avatar[k], src, dst, (Vector2){0,0}, 0.0f, (Color){100, 100, 100, 255});
+                        }
+                        
+                        int dono = -1;
+                        for(int h=0; h < humano_atual; h++) {
+                            if(avatar_escolhido[h] == k) { dono = h; break; }
+                        }
+                        if (dono != -1) {
+                            char dono_txt[32];
+                            snprintf(dono_txt, sizeof(dono_txt), "Jogador %d", dono + 1);
+                            int dw = MeasureText(dono_txt, 14);
+                            DrawText(dono_txt,
+                                     (int)(br.x + SEL_BW/2 - dw/2),
+                                     (int)(br.y + SEL_BH + 5),
+                                     14, COR_PINO[dono]);
+                        }
                         continue;
                     }
 
@@ -962,6 +1052,24 @@ int main(void)
             render_hud_cartas_acao(J_ATUAL, &anim, GetFontDefault());
             render_acao_overlay(jogadores, NUM_JOGADORES, jogador_atual, &anim, GetFontDefault());
             render_venda_overlay(&anim, J_ATUAL, tabuleiro, jogador_atual);
+
+            if (anim.estado == TURNO_MENSAGEM_VEZ) {
+                DrawRectangle(0, 0, 1280, 720, (Color){0, 0, 0, 180});
+                
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Vez do %s", J_ATUAL->nome);
+                int tw = MeasureText(msg, 60);
+                int tx = LARGURA/2 - tw/2;
+                int ty = 360 - 30;
+                
+                DrawRectangle(0, ty - 30, 1280, 120, (Color){20, 20, 30, 240});
+                DrawRectangle(0, ty - 30, 1280, 5, COR_PINO[jogador_atual]);
+                DrawRectangle(0, ty + 90, 1280, 5, COR_PINO[jogador_atual]);
+                
+                DrawText(msg, tx - 3, ty + 3, 60, BLACK);
+                DrawText(msg, tx + 3, ty + 3, 60, BLACK);
+                DrawText(msg, tx, ty, 60, COR_PINO[jogador_atual]);
+            }
             break;
         }
 
